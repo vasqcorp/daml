@@ -64,32 +64,33 @@ private[events] object EventsRange {
   }
 
   private[events] def readPage[A](
-      read: (EventsRange[Long], String) => SimpleSql[Row], // takes range and limit sub-expression
-      row: RowParser[A],
-      range: EventsRange[Long],
-      pageSize: Int,
-  ): SqlSequence[Vector[A]] = {
+     read: (
+       EventsRange[Long],
+         String,
+       ) => SimpleSql[Row], // takes range and limit sub-expression
+     row: RowParser[A],
+     range: EventsRange[Long],
+     pageSize: Int,
+   ): SqlSequence[Vector[A]] = {
     val minPageSize = 10 min pageSize max (pageSize / 10)
-    val guessedPageEnd = range.endInclusive min (range.startExclusive + pageSize)
-    SqlSequence
-      .vector(
-        read(range copy (endInclusive = guessedPageEnd), "") withFetchSize Some(pageSize),
-        row,
-      )
-      .flatMap { arithPage =>
-        val found = arithPage.size
-        if (guessedPageEnd == range.endInclusive || found >= minPageSize)
-          SqlSequence point arithPage
-        else
-          SqlSequence
-            .vector(
-              read(
-                range copy (startExclusive = guessedPageEnd),
-                s"limit ${minPageSize - found: Int}",
-              ) withFetchSize Some(minPageSize - found),
-              row,
-            )
-            .map(arithPage ++ _)
-      }
+
+    def loop(newBegin: Long, result: Vector[A]): SqlSequence[Vector[A]] = {
+      val guessedPageEnd = range.endInclusive min (newBegin + pageSize)
+      SqlSequence
+        .vector(
+          read(EventsRange(startExclusive = newBegin, endInclusive = guessedPageEnd), "") withFetchSize Some(pageSize),
+          row,
+        )
+        .flatMap { arithPage =>
+          val newResult = result ++ arithPage
+          val foundSize = newResult.size
+          if (guessedPageEnd == range.endInclusive || foundSize >= minPageSize)
+            SqlSequence point newResult
+          else
+            loop(newBegin = guessedPageEnd, newResult)
+        }
+
+    }
+    loop(range.startExclusive, Vector.empty)
   }
 }
