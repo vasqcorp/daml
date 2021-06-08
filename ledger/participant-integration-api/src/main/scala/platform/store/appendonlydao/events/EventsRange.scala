@@ -72,7 +72,6 @@ private[events] object EventsRange {
      range: EventsRange[Long],
      pageSize: Int,
    ): SqlSequence[Vector[A]] = {
-    val minPageSize = 10 min pageSize max (pageSize / 10)
 
     def loop(newBegin: Long, result: Vector[A]): SqlSequence[Vector[A]] = {
       val guessedPageEnd = range.endInclusive min (newBegin + pageSize)
@@ -83,8 +82,7 @@ private[events] object EventsRange {
         )
         .flatMap { arithPage =>
           val newResult = result ++ arithPage
-          val foundSize = newResult.size
-          if (guessedPageEnd == range.endInclusive || foundSize >= minPageSize)
+          if (guessedPageEnd == range.endInclusive)
             SqlSequence point newResult
           else
             loop(newBegin = guessedPageEnd, newResult)

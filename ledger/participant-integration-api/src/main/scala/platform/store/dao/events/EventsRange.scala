@@ -84,7 +84,10 @@ private[events] object EventsRange {
       val guessedPageEnd = range.endInclusive min (newBegin + pageSize)
       SqlSequence
         .vector(
-          read(EventsRange(startExclusive = newBegin, endInclusive = guessedPageEnd), None) withFetchSize Some(pageSize),
+          read(
+            EventsRange(startExclusive = newBegin, endInclusive = guessedPageEnd),
+            None,
+          ) withFetchSize Some(pageSize),
           row,
         )
         .flatMap { arithPage =>

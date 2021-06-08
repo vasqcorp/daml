@@ -94,32 +94,27 @@ private[appendonlydao] final class TransactionsReader(
 
     val requestedRangeF = getEventSeqIdRange(startExclusive, endInclusive)
 
-    val query = (range: EventsRange[(Offset, Long)]) => {
+    val query = (fullRangeForPruningCheck: EventsRange[Offset]) => (currentRange: EventsRange[Long]) => {
       implicit connection: Connection =>
-        logger.debug(s"getFlatTransactions query($range)")
+        logger.debug(s"getFlatTransactions query($currentRange)")
         QueryNonPruned.executeSqlOrThrow(
           EventsTableFlatEvents
             .preparePagedGetFlatTransactions(sqlFunctions)(
-              range = EventsRange(range.startExclusive._2, range.endInclusive._2),
+              range = currentRange,
               filter = filter,
               pageSize = pageSize,
             )
             .executeSql,
-          range.startExclusive._1,
+          fullRangeForPruningCheck.startExclusive,
           pruned =>
-            s"Transactions request from ${range.startExclusive._1.toHexString} to ${range.endInclusive._1.toHexString} precedes pruned offset ${pruned.toHexString}",
+            s"Transactions request from ${fullRangeForPruningCheck.startExclusive.toHexString} to ${fullRangeForPruningCheck.endInclusive.toHexString} precedes pruned offset ${pruned.toHexString}",
         )
     }
 
     val events: Source[EventsTable.Entry[Event], NotUsed] =
       Source
         .futureSource(requestedRangeF.map { requestedRange =>
-          streamEvents(
-            verbose,
-            dbMetrics.getFlatTransactions,
-            query,
-            nextPageRange[Event](requestedRange.endInclusive),
-          )(requestedRange)
+          streamEventsWithFixedPageSize(verbose,dbMetrics.getFlatTransactions, query, requestedRange)
         })
         .mapMaterializedValue(_ => NotUsed)
 
@@ -179,32 +174,33 @@ private[appendonlydao] final class TransactionsReader(
 
     val requestedRangeF = getEventSeqIdRange(startExclusive, endInclusive)
 
-    val query = (range: EventsRange[(Offset, Long)]) => {
-      implicit connection: Connection =>
-        logger.debug(s"getTransactionTrees query($range)")
-        QueryNonPruned.executeSqlOrThrow(
-          EventsTableTreeEvents
-            .preparePagedGetTransactionTrees(sqlFunctions)(
-              eventsRange = EventsRange(range.startExclusive._2, range.endInclusive._2),
-              requestingParties = requestingParties,
-              pageSize = pageSize,
-            )
-            .executeSql,
-          range.startExclusive._1,
-          pruned =>
-            s"Transactions request from ${range.startExclusive._1.toHexString} to ${range.endInclusive._1.toHexString} precedes pruned offset ${pruned.toHexString}",
-        )
-    }
+    val query = (fullRangeForPruningCheck: EventsRange[Offset]) =>
+      (currentRange: EventsRange[Long]) => {
+        implicit connection: Connection =>
+          logger.debug(s"getTransactionTrees query($currentRange)")
+          QueryNonPruned.executeSqlOrThrow(
+            EventsTableTreeEvents
+              .preparePagedGetTransactionTrees(sqlFunctions)(
+                eventsRange = currentRange,
+                requestingParties = requestingParties,
+                pageSize = pageSize,
+              )
+              .executeSql,
+            fullRangeForPruningCheck.startExclusive,
+            pruned =>
+              s"Transactions request from ${fullRangeForPruningCheck.startExclusive.toHexString} to ${fullRangeForPruningCheck.endInclusive.toHexString} precedes pruned offset ${pruned.toHexString}",
+          )
+      }
 
     val events: Source[EventsTable.Entry[TreeEvent], NotUsed] =
       Source
         .futureSource(requestedRangeF.map { requestedRange =>
-          streamEvents(
+          streamEventsWithFixedPageSize(
             verbose,
             dbMetrics.getTransactionTrees,
             query,
-            nextPageRange[TreeEvent](requestedRange.endInclusive),
-          )(requestedRange)
+            requestedRange,
+          )
         })
         .mapMaterializedValue(_ => NotUsed)
 
@@ -478,19 +474,53 @@ private[appendonlydao] final class TransactionsReader(
       loggingContext: LoggingContext
   ): Source[EventsTable.Entry[E], NotUsed] =
     PaginatingAsyncStream.streamFrom(range, getNextPageRange) { range1 =>
-      if (EventsRange.isEmpty(range1))
-        Future.successful(Vector.empty)
-      else {
-        val rawEvents: Future[Vector[EventsTable.Entry[Raw[E]]]] =
-          dispatcher.executeSql(queryMetric)(query(range1))
-        rawEvents.flatMap(es =>
-          Timed.future(
-            future = Future.traverse(es)(deserializeEntry(verbose)),
-            timer = queryMetric.translationTimer,
-          )
-        )
-      }
+      fetchEventsInRange(verbose, queryMetric, query)(range1)
     }
+
+  private def streamEventsWithFixedPageSize[E](
+      verbose: Boolean,
+      queryMetric: DatabaseMetrics,
+      query: EventsRange[Offset] => EventsRange[Long] => Connection => Vector[
+        EventsTable.Entry[Raw[E]]
+      ],
+      fullRange: EventsRange[(Offset, Long)],
+  )(implicit loggingContext: LoggingContext): Source[EventsTable.Entry[E], NotUsed] =
+    Source
+      .fromIterator(() => Iterator.iterate(fullRange.startExclusive._2)(_ + pageSize))
+      .takeWhile(_ <= fullRange.endInclusive._2)
+      .sliding(2)
+      .map { case Seq(startExclusive, endInclusive) =>
+        EventsRange(startExclusive, endInclusive.min(fullRange.endInclusive._2))
+      }
+      .mapAsync(5) { eventsRange =>
+        fetchEventsInRange(
+          verbose,
+          queryMetric,
+          query(fullRange.map(_._1)),
+        )(eventsRange)
+      }
+      .mapConcat(identity)
+
+  private def fetchEventsInRange[A: Ordering, E](
+      verbose: Boolean,
+      queryMetric: DatabaseMetrics,
+      query: EventsRange[A] => Connection => Vector[EventsTable.Entry[Raw[E]]],
+  )(
+      range: EventsRange[A]
+  )(implicit loggingContext: LoggingContext): Future[Vector[EventsTable.Entry[E]]] = {
+    if (EventsRange.isEmpty(range))
+      Future.successful(Vector.empty)
+    else {
+      val rawEvents: Future[Vector[EventsTable.Entry[Raw[E]]]] =
+        dispatcher.executeSql(queryMetric)(query(range))
+      rawEvents.flatMap(es =>
+        Timed.future(
+          future = Future.traverse(es)(deserializeEntry(verbose)),
+          timer = queryMetric.translationTimer,
+        )
+      )
+    }
+  }
 
   private def streamContractStateEvents(
       queryMetric: DatabaseMetrics,
