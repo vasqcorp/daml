@@ -487,7 +487,7 @@ private[appendonlydao] final class TransactionsReader(
   )(implicit loggingContext: LoggingContext): Source[EventsTable.Entry[E], NotUsed] =
     Source
       .fromIterator(() => Iterator.iterate(fullRange.startExclusive._2)(_ + pageSize))
-      .takeWhile(_ <= fullRange.endInclusive._2)
+      .takeWhile(_ < fullRange.endInclusive._2, inclusive = true)
       .sliding(2)
       .map { case Seq(startExclusive, endInclusive) =>
         EventsRange(startExclusive, endInclusive.min(fullRange.endInclusive._2))
