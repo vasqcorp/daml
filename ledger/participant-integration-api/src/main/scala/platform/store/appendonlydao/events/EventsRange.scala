@@ -64,20 +64,23 @@ private[events] object EventsRange {
   }
 
   private[events] def readPage[A](
-     read: (
-       EventsRange[Long],
-         String,
-       ) => SimpleSql[Row], // takes range and limit sub-expression
-     row: RowParser[A],
-     range: EventsRange[Long],
-     pageSize: Int,
-   ): SqlSequence[Vector[A]] = {
+      read: (
+          EventsRange[Long],
+          String,
+      ) => SimpleSql[Row], // takes range and limit sub-expression
+      row: RowParser[A],
+      range: EventsRange[Long],
+      pageSize: Int,
+  ): SqlSequence[Vector[A]] = {
 
     def loop(newBegin: Long, result: Vector[A]): SqlSequence[Vector[A]] = {
       val guessedPageEnd = range.endInclusive min (newBegin + pageSize)
       SqlSequence
         .vector(
-          read(EventsRange(startExclusive = newBegin, endInclusive = guessedPageEnd), "") withFetchSize Some(pageSize),
+          read(
+            EventsRange(startExclusive = newBegin, endInclusive = guessedPageEnd),
+            "",
+          ) withFetchSize Some(pageSize),
           row,
         )
         .flatMap { arithPage =>

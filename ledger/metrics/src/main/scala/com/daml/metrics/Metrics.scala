@@ -496,10 +496,14 @@ final class Metrics(val registry: MetricRegistry) {
         val lookupMaximumLedgerTimeDbMetrics: DatabaseMetrics = createDbMetrics(
           "lookup_maximum_ledger_time"
         ) // FIXME Base name conflicts with lookupActiveContract
+        val flatTransactionUpdatesBufferSize: Counter =
+          registry.counter(Prefix :+ "flat_transaction_updates_buffer_size")
         val getFlatTransactions: DatabaseMetrics = createDbMetrics("get_flat_transactions")
         val lookupFlatTransactionById: DatabaseMetrics = createDbMetrics(
           "lookup_flat_transaction_by_id"
         )
+        val transactionTreeUpdatesBufferSize: Counter =
+          registry.counter(Prefix :+ "transaction_tree_updates_buffer_size")
         val getTransactionTrees: DatabaseMetrics = createDbMetrics("get_transaction_trees")
         val lookupTransactionTreeById: DatabaseMetrics = createDbMetrics(
           "lookup_transaction_tree_by_id"

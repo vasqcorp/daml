@@ -11,7 +11,6 @@ import akka.{Done, NotUsed}
 import com.daml.ledger.api.TraceIdentifiers
 import com.daml.ledger.api.v1.active_contracts_service.GetActiveContractsResponse
 import com.daml.ledger.api.v1.event.Event
-import com.daml.ledger.api.v1.transaction.TreeEvent
 import com.daml.ledger.api.v1.transaction_service.{
   GetFlatTransactionResponse,
   GetTransactionResponse,
@@ -94,46 +93,68 @@ private[appendonlydao] final class TransactionsReader(
 
     val requestedRangeF = getEventSeqIdRange(startExclusive, endInclusive)
 
-    val query = (fullRangeForPruningCheck: EventsRange[Offset]) => (currentRange: EventsRange[Long]) => {
-      implicit connection: Connection =>
-        logger.debug(s"getFlatTransactions query($currentRange)")
-        QueryNonPruned.executeSqlOrThrow(
-          EventsTableFlatEvents
-            .preparePagedGetFlatTransactions(sqlFunctions)(
-              range = currentRange,
-              filter = filter,
-              pageSize = pageSize,
-            )
-            .executeSql,
-          fullRangeForPruningCheck.startExclusive,
-          pruned =>
-            s"Transactions request from ${fullRangeForPruningCheck.startExclusive.toHexString} to ${fullRangeForPruningCheck.endInclusive.toHexString} precedes pruned offset ${pruned.toHexString}",
-        )
-    }
-
-    val events: Source[EventsTable.Entry[Event], NotUsed] =
-      Source
-        .futureSource(requestedRangeF.map { requestedRange =>
-          streamEventsWithFixedPageSize(verbose,dbMetrics.getFlatTransactions, query, requestedRange)
-        })
-        .mapMaterializedValue(_ => NotUsed)
-
-    groupContiguous(events)(by = _.transactionId)
-      .mapConcat { events =>
-        val response = EventsTable.Entry.toGetTransactionsResponse(events)
-        response.map(r => offsetFor(r) -> r)
-      }
-      .buffer(outputStreamBufferSize, OverflowStrategy.backpressure)
-      .wireTap(_ match {
-        case (_, response) =>
-          response.transactions.foreach(txn =>
-            Spans.addEventToSpan(
-              telemetry.Event("transaction", TraceIdentifiers.fromTransaction(txn)),
-              span,
-            )
+    Source
+      .future(requestedRangeF)
+      .flatMapConcat { requestedRange =>
+        val eventsSource = Source
+          .fromIterator(() =>
+            TransactionsReader
+              .splitRange(
+                requestedRange.startExclusive._2,
+                requestedRange.endInclusive._2,
+                TransactionEventsFetchParallelism,
+                MinParallelFetchChunkSize,
+              )
+              .iterator
           )
-      })
-      .watchTermination()(endSpanOnTermination(span))
+          // Dispatch database fetches in parallel
+          .mapAsync(TransactionEventsFetchParallelism) { range =>
+            dispatcher.executeSql(dbMetrics.getFlatTransactions) { implicit conn =>
+              QueryNonPruned.executeSqlOrThrow(
+                query = EventsTableFlatEvents
+                  .preparePagedGetFlatTransactions(sqlFunctions)(
+                    range = range,
+                    filter = filter,
+                    pageSize = pageSize,
+                  )
+                  .executeSql(conn),
+                minOffsetExclusive = requestedRange.startExclusive._1,
+                error = pruned =>
+                  s"Transaction request from ${startExclusive.toHexString} precedes pruned offset ${pruned.toHexString}",
+              )
+            }
+          }
+          .flatMapConcat(v => Source.fromIterator(() => v.iterator))
+          // Decode transaction log updates in parallel
+          .mapAsync(TransactionEventsFetchParallelism) { raw =>
+            Timed.future(
+              dbMetrics.getFlatTransactions.translationTimer,
+              deserializeEntry(verbose)(raw),
+            )
+          }
+
+        InstrumentedSource
+          .bufferedSource(
+            original = groupContiguous(eventsSource)(by = _.transactionId)
+              .mapConcat { v =>
+                val response = EventsTable.Entry.toGetTransactionsResponse(v)
+                response.map(r => offsetFor(r) -> r)
+              }
+              .mapMaterializedValue(_ => NotUsed),
+            counter = metrics.daml.index.db.flatTransactionUpdatesBufferSize,
+            size = outputStreamBufferSize,
+          )
+          .wireTap(_ match {
+            case (_, response) =>
+              response.transactions.foreach(txn =>
+                Spans.addEventToSpan(
+                  telemetry.Event("transaction", TraceIdentifiers.fromTransaction(txn)),
+                  span,
+                )
+              )
+          })
+          .watchTermination()(endSpanOnTermination(span))
+      }
   }
 
   override def lookupFlatTransactionById(
@@ -174,52 +195,69 @@ private[appendonlydao] final class TransactionsReader(
 
     val requestedRangeF = getEventSeqIdRange(startExclusive, endInclusive)
 
-    val query = (fullRangeForPruningCheck: EventsRange[Offset]) =>
-      (currentRange: EventsRange[Long]) => {
-        implicit connection: Connection =>
-          logger.debug(s"getTransactionTrees query($currentRange)")
-          QueryNonPruned.executeSqlOrThrow(
-            EventsTableTreeEvents
-              .preparePagedGetTransactionTrees(sqlFunctions)(
-                eventsRange = currentRange,
-                requestingParties = requestingParties,
-                pageSize = pageSize,
+    Source
+      .future(requestedRangeF)
+      .flatMapConcat { requestedRange =>
+        val eventsSource = Source
+          .fromIterator(() =>
+            TransactionsReader
+              .splitRange(
+                requestedRange.startExclusive._2,
+                requestedRange.endInclusive._2,
+                TransactionEventsFetchParallelism,
+                MinParallelFetchChunkSize,
               )
-              .executeSql,
-            fullRangeForPruningCheck.startExclusive,
-            pruned =>
-              s"Transactions request from ${fullRangeForPruningCheck.startExclusive.toHexString} to ${fullRangeForPruningCheck.endInclusive.toHexString} precedes pruned offset ${pruned.toHexString}",
+              .iterator
           )
-      }
-
-    val events: Source[EventsTable.Entry[TreeEvent], NotUsed] =
-      Source
-        .futureSource(requestedRangeF.map { requestedRange =>
-          streamEventsWithFixedPageSize(
-            verbose,
-            dbMetrics.getTransactionTrees,
-            query,
-            requestedRange,
-          )
-        })
-        .mapMaterializedValue(_ => NotUsed)
-
-    groupContiguous(events)(by = _.transactionId)
-      .mapConcat { events =>
-        val response = EventsTable.Entry.toGetTransactionTreesResponse(events)
-        response.map(r => offsetFor(r) -> r)
-      }
-      .buffer(outputStreamBufferSize, OverflowStrategy.backpressure)
-      .wireTap(_ match {
-        case (_, response) =>
-          response.transactions.foreach(txn =>
-            Spans.addEventToSpan(
-              telemetry.Event("transaction", TraceIdentifiers.fromTransactionTree(txn)),
-              span,
+          // Dispatch database fetches in parallel
+          .mapAsync(TransactionEventsFetchParallelism) { range =>
+            dispatcher.executeSql(dbMetrics.getTransactionTrees) { implicit conn =>
+              QueryNonPruned.executeSqlOrThrow(
+                query = EventsTableTreeEvents
+                  .preparePagedGetTransactionTrees(sqlFunctions)(
+                    eventsRange = range,
+                    requestingParties = requestingParties,
+                    pageSize = pageSize,
+                  )
+                  .executeSql(conn),
+                minOffsetExclusive = requestedRange.startExclusive._1,
+                error = pruned =>
+                  s"Transaction trees request from ${startExclusive.toHexString} precedes pruned offset ${pruned.toHexString}",
+              )
+            }
+          }
+          .flatMapConcat(v => Source.fromIterator(() => v.iterator))
+          // Decode transaction log updates in parallel
+          .mapAsync(TransactionEventsFetchParallelism) { raw =>
+            Timed.future(
+              dbMetrics.getTransactionTrees.translationTimer,
+              deserializeEntry(verbose)(raw),
             )
+          }
+
+        InstrumentedSource
+          .bufferedSource(
+            original = groupContiguous(eventsSource)(by = _.transactionId)
+              .mapConcat { v =>
+                val response = EventsTable.Entry.toGetTransactionTreesResponse(v)
+                response.map(r => offsetFor(r) -> r)
+              }
+              .mapMaterializedValue(_ => NotUsed),
+            counter = metrics.daml.index.db.transactionTreeUpdatesBufferSize,
+            size = outputStreamBufferSize,
           )
-      })
-      .watchTermination()(endSpanOnTermination(span))
+          .wireTap(_ match {
+            case (_, response) =>
+              response.transactions.foreach(txn =>
+                Spans.addEventToSpan(
+                  telemetry.Event("transaction", TraceIdentifiers.fromTransactionTree(txn)),
+                  span,
+                )
+              )
+          })
+          .watchTermination()(endSpanOnTermination(span))
+      }
+
   }
 
   override def lookupTransactionTreeById(
@@ -476,30 +514,6 @@ private[appendonlydao] final class TransactionsReader(
     PaginatingAsyncStream.streamFrom(range, getNextPageRange) { range1 =>
       fetchEventsInRange(verbose, queryMetric, query)(range1)
     }
-
-  private def streamEventsWithFixedPageSize[E](
-      verbose: Boolean,
-      queryMetric: DatabaseMetrics,
-      query: EventsRange[Offset] => EventsRange[Long] => Connection => Vector[
-        EventsTable.Entry[Raw[E]]
-      ],
-      fullRange: EventsRange[(Offset, Long)],
-  )(implicit loggingContext: LoggingContext): Source[EventsTable.Entry[E], NotUsed] =
-    Source
-      .fromIterator(() => Iterator.iterate(fullRange.startExclusive._2)(_ + pageSize))
-      .sliding(2)
-      .map { case Seq(startExclusive, endInclusive) =>
-        EventsRange(startExclusive, endInclusive.min(fullRange.endInclusive._2))
-      }
-      .takeWhile(_.endInclusive <= fullRange.endInclusive._2)
-      .mapAsync(5) { eventsRange =>
-        fetchEventsInRange(
-          verbose,
-          queryMetric,
-          query(fullRange.map(_._1)),
-        )(eventsRange)
-      }
-      .mapConcat(identity)
 
   private def fetchEventsInRange[A: Ordering, E](
       verbose: Boolean,
