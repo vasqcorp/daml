@@ -94,27 +94,33 @@ private[appendonlydao] final class TransactionsReader(
 
     val requestedRangeF = getEventSeqIdRange(startExclusive, endInclusive)
 
-    val query = (fullRangeForPruningCheck: EventsRange[Offset]) => (currentRange: EventsRange[Long]) => {
-      implicit connection: Connection =>
-        logger.debug(s"getFlatTransactions query($currentRange)")
-        QueryNonPruned.executeSqlOrThrow(
-          EventsTableFlatEvents
-            .preparePagedGetFlatTransactions(sqlFunctions)(
-              range = currentRange,
-              filter = filter,
-              pageSize = pageSize,
-            )
-            .executeSql,
-          fullRangeForPruningCheck.startExclusive,
-          pruned =>
-            s"Transactions request from ${fullRangeForPruningCheck.startExclusive.toHexString} to ${fullRangeForPruningCheck.endInclusive.toHexString} precedes pruned offset ${pruned.toHexString}",
-        )
-    }
+    val query = (fullRangeForPruningCheck: EventsRange[Offset]) =>
+      (currentRange: EventsRange[Long]) => {
+        implicit connection: Connection =>
+          logger.debug(s"getFlatTransactions query($currentRange)")
+          QueryNonPruned.executeSqlOrThrow(
+            EventsTableFlatEvents
+              .preparePagedGetFlatTransactions(sqlFunctions)(
+                range = currentRange,
+                filter = filter,
+                pageSize = pageSize,
+              )
+              .executeSql,
+            fullRangeForPruningCheck.startExclusive,
+            pruned =>
+              s"Transactions request from ${fullRangeForPruningCheck.startExclusive.toHexString} to ${fullRangeForPruningCheck.endInclusive.toHexString} precedes pruned offset ${pruned.toHexString}",
+          )
+      }
 
     val events: Source[EventsTable.Entry[Event], NotUsed] =
       Source
         .futureSource(requestedRangeF.map { requestedRange =>
-          streamEventsWithFixedPageSize(verbose,dbMetrics.getFlatTransactions, query, requestedRange)
+          streamEventsWithFixedPageSize(
+            verbose,
+            dbMetrics.getFlatTransactions,
+            query,
+            requestedRange,
+          )
         })
         .mapMaterializedValue(_ => NotUsed)
 
@@ -491,7 +497,7 @@ private[appendonlydao] final class TransactionsReader(
       .map { case Seq(startExclusive, endInclusive) =>
         EventsRange(startExclusive, endInclusive.min(fullRange.endInclusive._2))
       }
-      .takeWhile(_.endInclusive <= fullRange.endInclusive._2)
+      .takeWhile(_.endInclusive < fullRange.endInclusive._2, inclusive = true)
       .mapAsync(5) { eventsRange =>
         fetchEventsInRange(
           verbose,
