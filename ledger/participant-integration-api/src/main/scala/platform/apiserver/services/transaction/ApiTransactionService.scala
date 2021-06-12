@@ -22,7 +22,7 @@ import com.daml.ledger.api.v1.transaction_service.{
 import com.daml.ledger.api.validation.PartyNameChecker
 import com.daml.logging.LoggingContext.withEnrichedLoggingContext
 import com.daml.logging.{ContextualizedLogger, LoggingContext}
-import com.daml.metrics.Metrics
+import com.daml.metrics.{InstrumentedSource, Metrics}
 import com.daml.platform.apiserver.services.{StreamMetrics, logging}
 import com.daml.ledger
 import com.daml.platform.server.api.services.domain.TransactionService
@@ -73,8 +73,14 @@ private[apiserver] final class ApiTransactionService private (
     ) { implicit loggingContext =>
       val subscriptionId = subscriptionIdCounter.incrementAndGet().toString
       logger.info(s"Received request for transaction subscription $subscriptionId: $request")
-      transactionsService
+      val transactionSource = transactionsService
         .transactions(request.startExclusive, request.endInclusive, request.filter, request.verbose)
+      InstrumentedSource
+        .bufferedSource(
+          original = transactionSource,
+          counter = metrics.daml.index.db.flatTransactionsBufferSize,
+          size = 50000,
+        )
         .via(logger.debugStream(transactionsLoggable))
         .via(logger.logErrorsOnStream)
         .via(StreamMetrics.countElements(metrics.daml.lapi.streams.transactions))
@@ -110,12 +116,18 @@ private[apiserver] final class ApiTransactionService private (
       logging.parties(request.parties),
     ) { implicit loggingContext =>
       logger.info(s"Received request for transaction tree subscription: $request")
-      transactionsService
+      val transactionSource = transactionsService
         .transactionTrees(
           request.startExclusive,
           request.endInclusive,
           TransactionFilter(request.parties.map(p => p -> Filters.noFilter).toMap),
           request.verbose,
+        )
+      InstrumentedSource
+        .bufferedSource(
+          original = transactionSource,
+          counter = metrics.daml.index.db.transactionTreesBufferSize,
+          size = 50000,
         )
         .via(logger.debugStream(transactionTreesLoggable))
         .via(logger.logErrorsOnStream)
