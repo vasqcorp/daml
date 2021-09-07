@@ -47,8 +47,8 @@ object IndexerConfig {
 
   val DefaultMaxInputBufferSize: Int = 50
   val DefaultInputMappingParallelism: Int = 16
-  val DefaultBatchingParallelism: Int = 1
-  val DefaultIngestionParallelism: Int = 16
+  val DefaultBatchingParallelism: Int = 4
+  val DefaultIngestionParallelism: Int = 1
   val DefaultSubmissionBatchSize: Long = 50L
   val DefaultTailingRateLimitPerSecond: Int = 20
   val DefaultBatchWithinMillis: Long = 50L
