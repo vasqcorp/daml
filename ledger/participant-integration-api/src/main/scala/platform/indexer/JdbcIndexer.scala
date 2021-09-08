@@ -70,6 +70,7 @@ object JdbcIndexer {
       )
 
     private val logger = ContextualizedLogger.get(this.getClass)
+    logger.info(s"Creating parallel indexer with config $config")
 
     def validateSchema()(implicit
         resourceContext: ResourceContext
