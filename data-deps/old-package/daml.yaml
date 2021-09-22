@@ -1,0 +1,16 @@
+# for config file options, refer to
+# https://docs.daml.com/tools/assistant.html#project-config-file-daml-yaml
+
+sdk-version: 1.17.0-snapshot.20210915.7841.0.b4328b3d
+name: old-package
+source: daml
+init-script: Main:setup
+parties:
+  - Alice
+  - Bob
+version: 0.0.1
+dependencies:
+  - daml-prim
+  - daml-stdlib
+sandbox-options:
+  - --wall-clock-time

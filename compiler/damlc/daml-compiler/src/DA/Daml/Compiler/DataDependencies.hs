@@ -602,15 +602,15 @@ generateSrcFromLf env = noLoc mod
 
     -- imports needed by the module declarations
     imports
-     =
-        [ modRefImport config modRef
-        | modRef@ModRef{..} <- Set.toList modRefs
-         -- don’t import ourselves
-        , not (modRefModule == lfModName && modRefOrigin == FromPackage (configSelfPkgId config))
-        -- GHC.Prim doesn’t need to and cannot be explicitly imported (it is not exposed since the interface file is black magic
-        -- hardcoded in GHC).
-        , modRefModule /= LF.ModuleName ["CurrentSdk", "GHC", "Prim"]
-        ]
+     = error "wut!" modRefs
+        -- [ modRefImport config modRef
+        -- | modRef@ModRef{..} <- Set.toList modRefs
+        --  -- don’t import ourselves
+        -- , not (modRefModule == lfModName && modRefOrigin == FromPackage (configSelfPkgId config))
+        -- -- GHC.Prim doesn’t need to and cannot be explicitly imported (it is not exposed since the interface file is black magic
+        -- -- hardcoded in GHC).
+        -- , modRefModule /= LF.ModuleName ["CurrentSdk", "GHC", "Prim"]
+        -- ] <> extraImports
 
 getTypeClassFields :: LF.Type -> Maybe [(LF.FieldName, LF.Type)]
 getTypeClassFields = \case
