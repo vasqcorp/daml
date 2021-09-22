@@ -104,7 +104,7 @@ package object events {
   }
 
   private[events] def convert(template: Identifier, key: lftx.Node.KeyWithMaintainers[Value]): Key =
-    Key.assertBuild(template, key.key.value)
+    Key.assertBuild(template, key.key.unversioned)
 
   private[events] def convertLfValueKey(
       template: Identifier,

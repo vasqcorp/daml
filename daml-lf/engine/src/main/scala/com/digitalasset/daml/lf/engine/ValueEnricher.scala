@@ -24,8 +24,8 @@ final class ValueEnricher(engine: Engine) {
       versionedValue: VersionedValue,
   ): Result[VersionedValue] =
     for {
-      value <- enrichValue(typ, versionedValue.value)
-    } yield versionedValue.copy(value = value)
+      value <- enrichValue(typ, versionedValue.unversioned)
+    } yield versionedValue.copy(unversioned = value)
 
   def enrichContract(
       contract: Value.ContractInst[Value]

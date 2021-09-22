@@ -72,7 +72,7 @@ class IdeLedgerClient(
         (cid, arg)
     }
     Future.successful(filtered.map { case (cid, c) =>
-      ScriptLedgerClient.ActiveContract(templateId, cid, c.value)
+      ScriptLedgerClient.ActiveContract(templateId, cid, c.unversioned)
     })
   }
 
@@ -91,7 +91,9 @@ class IdeLedgerClient(
     ) match {
       case ScenarioLedger.LookupOk(_, Value.ContractInst(_, arg, _), stakeholders)
           if parties.any(stakeholders.contains(_)) =>
-        Future.successful(Some(ScriptLedgerClient.ActiveContract(templateId, cid, arg.value)))
+        Future.successful(
+          Some(ScriptLedgerClient.ActiveContract(templateId, cid, arg.unversioned))
+        )
       case _ =>
         // Note that contrary to `fetch` in a scenario, we do not
         // abort on any of the error cases. This makes sense if you

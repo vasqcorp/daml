@@ -28,7 +28,7 @@ import com.daml.lf.transaction._
 import com.daml.lf.transaction.test.TransactionBuilder
 import com.daml.lf.transaction.test.TransactionBuilder.Implicits._
 import com.daml.lf.value.Value.{ContractId, ValueRecord, ValueText}
-import com.daml.lf.value.{Value, ValueOuterClass}
+import com.daml.lf.value.{Value, ValueOuterClass, Versioned}
 import com.daml.logging.LoggingContext
 import com.daml.metrics.Metrics
 import com.google.protobuf.ByteString
@@ -436,7 +436,7 @@ object ModelConformanceValidatorSpec {
 
   private val aContractInst = Value.ContractInst(
     aTemplateId,
-    Value.VersionedValue(txVersion, ValueText("dummyValue")),
+    Versioned(txVersion, ValueText("dummyValue")),
     "",
   )
 

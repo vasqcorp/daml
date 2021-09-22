@@ -57,7 +57,7 @@ object Node {
     def byKey: Boolean
 
     protected def versionValue[Cid2 >: ContractId](v: Value): VersionedValue =
-      VersionedValue(version, v)
+      Versioned(version, v)
   }
 
   /** A transaction node that can't possibly refer to `Nid`s. */

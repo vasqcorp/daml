@@ -79,7 +79,9 @@ object Util {
   def normalizeVersionedValue(
       value: VersionedValue
   ): Either[String, VersionedValue] =
-    normalizeValue(value.value, value.version).map(normalized => value.copy(value = normalized))
+    normalizeValue(value.unversioned, value.version).map(normalized =>
+      value.copy(unversioned = normalized)
+    )
 
   def normalizeContract(
       contract: ContractInst[VersionedValue]

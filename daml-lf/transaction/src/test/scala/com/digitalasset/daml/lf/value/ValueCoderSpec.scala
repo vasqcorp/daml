@@ -141,7 +141,7 @@ class ValueCoderSpec
     }
 
     "do versioned value with supported override version" in forAll(versionedValueGen) {
-      case VersionedValue(version, value) => testRoundTrip(value, version)
+      case Versioned(version, value) => testRoundTrip(value, version)
     }
 
   }
@@ -182,13 +182,13 @@ class ValueCoderSpec
     val normalizedValue = transaction.Util.assertNormalizeValue(value0, version)
     val encoded: proto.VersionedValue = assertRight(
       ValueCoder
-        .encodeVersionedValue(ValueCoder.CidEncoder, VersionedValue(version, value0))
+        .encodeVersionedValue(ValueCoder.CidEncoder, Versioned(version, value0))
     )
     val decoded: VersionedValue = assertRight(
       ValueCoder.decodeVersionedValue(ValueCoder.CidDecoder, encoded)
     )
 
-    decoded.value shouldEqual normalizedValue
+    decoded.unversioned shouldEqual normalizedValue
     decoded.version shouldEqual version
 
     // emulate passing encoded proto message over wire
@@ -199,7 +199,7 @@ class ValueCoderSpec
       ValueCoder.decodeVersionedValue(ValueCoder.CidDecoder, encodedSentOverWire)
     )
 
-    decodedSentOverWire.value shouldEqual normalizedValue
+    decodedSentOverWire.unversioned shouldEqual normalizedValue
     decodedSentOverWire.version shouldEqual version
   }
 }

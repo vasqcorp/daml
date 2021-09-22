@@ -65,7 +65,7 @@ private[replay] final class Adapter(
   def adapt(coinst: Tx.ContractInst): Tx.ContractInst =
     coinst.copy(
       template = adapt(coinst.template),
-      arg = coinst.arg.copy(value = adapt(coinst.arg.value)),
+      arg = coinst.arg.copy(unversioned = adapt(coinst.arg.unversioned)),
     )
 
   def adapt(gkey: GlobalKey): GlobalKey =

@@ -261,7 +261,7 @@ object ValueGenerators {
       value <- valueGen
       minVersion = TransactionBuilder.assertAssignVersion(value)
       version <- transactionVersionGen(minVersion)
-    } yield VersionedValue(version, value)
+    } yield Versioned(version, value)
 
   private[lf] val genMaybeEmptyParties: Gen[Set[Party]] = Gen.listOf(party).map(_.toSet)
 

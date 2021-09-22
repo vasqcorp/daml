@@ -156,7 +156,7 @@ object ValueCoder {
     for {
       version <- decodeValueVersion(protoValue0.getVersion)
       value <- decodeValue(decodeCid, version, protoValue0.getValue)
-    } yield VersionedValue(version, value)
+    } yield Versioned(version, value)
 
   // We need (3 * MAXIMUM_NESTING + 1) as record and maps use:
   // - 3 nested messages for the cases of non empty records/maps)
@@ -168,7 +168,7 @@ object ValueCoder {
       decodeCid: DecodeCid,
       protoValue0: proto.VersionedValue,
   ): Either[DecodeError, Value] =
-    decodeVersionedValue(decodeCid, protoValue0) map (_.value)
+    decodeVersionedValue(decodeCid, protoValue0) map (_.unversioned)
 
   private[this] def parseValue(bytes: ByteString): Either[DecodeError, proto.Value] =
     Try {
@@ -374,7 +374,7 @@ object ValueCoder {
       encodeCid: EncodeCid,
       versionedValue: VersionedValue,
   ): Either[EncodeError, proto.VersionedValue] =
-    encodeVersionedValue(encodeCid, versionedValue.version, versionedValue.value)
+    encodeVersionedValue(encodeCid, versionedValue.version, versionedValue.unversioned)
 
   def encodeVersionedValue(
       encodeCid: EncodeCid,

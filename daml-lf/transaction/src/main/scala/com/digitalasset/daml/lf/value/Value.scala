@@ -8,7 +8,6 @@ import com.daml.lf.crypto.Hash
 import com.daml.lf.data.Ref.{Identifier, Name}
 import com.daml.lf.data._
 import com.daml.lf.language.Ast
-import com.daml.lf.transaction.TransactionVersion
 import data.ScalazEqual._
 
 import scalaz.{@@, Equal, Order, Tag}
@@ -94,28 +93,7 @@ object Value {
     */
   val MAXIMUM_NESTING: Int = 100
 
-  final case class VersionedValue(version: TransactionVersion, value: Value)
-      extends CidContainer[VersionedValue] {
-
-    override protected def self: this.type = this
-
-    final override def mapCid(f: ContractId => ContractId): VersionedValue =
-      copy(value = value.mapCid(f))
-
-    def foreach1(f: ContractId => Unit) =
-      value.foreach1(f)
-
-    def cids[Cid2 >: ContractId]: Set[Cid2] = value.cids
-  }
-
-  object VersionedValue {
-    implicit def `VersionedValue Equal instance`: Equal[VersionedValue] =
-      ScalazEqual.withNatural(Equal[ContractId].equalIsNatural) { (a, b) =>
-        import a._
-        val VersionedValue(bVersion, bValue) = b
-        version == bVersion && value === bValue
-      }
-  }
+  type VersionedValue = Versioned[Value]
 
   /** The parent of all [[Value]] cases that cannot possibly have a Cid.
     * NB: use only in pattern-matching [[Value]]; the ''type'' of a cid-less

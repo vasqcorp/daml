@@ -48,7 +48,7 @@ object LfEngineToApi {
       verbose: Boolean,
       recordValue: Lf.VersionedValue,
   ): Either[String, api.Record] =
-    lfValueToApiRecord(verbose, recordValue.value)
+    lfValueToApiRecord(verbose, recordValue.unversioned)
 
   def lfValueToApiRecord(
       verbose: Boolean,
@@ -88,7 +88,7 @@ object LfEngineToApi {
       verbose: Boolean,
       value: Lf.VersionedValue,
   ): Either[String, api.Value] =
-    lfValueToApiValue(verbose, value.value)
+    lfValueToApiValue(verbose, value.unversioned)
 
   def lfValueToApiValue(
       verbose: Boolean,

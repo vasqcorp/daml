@@ -19,7 +19,7 @@ import com.daml.lf.speedy.SResult._
 import com.daml.lf.speedy.SValue.{SValue => _, _}
 import com.daml.lf.speedy.SValue.{SValue => SV}
 import com.daml.lf.transaction.{Transaction => Tx}
-import com.daml.lf.value.{Value => V}
+import com.daml.lf.value.{Versioned, Value => V}
 import com.daml.lf.transaction.{GlobalKey, GlobalKeyWithMaintainers, Node}
 import com.daml.lf.value.Value.ValueArithmeticError
 import com.daml.nameof.NameOf
@@ -1040,7 +1040,7 @@ private[lf] object SBuiltin {
               coid,
               templateId,
               onLedger.committers,
-              { case V.ContractInst(actualTmplId, V.VersionedValue(_, arg), _) =>
+              { case V.ContractInst(actualTmplId, Versioned(_, arg), _) =>
                 if (actualTmplId != templateId) {
                   machine.ctrl =
                     SEDamlException(IE.WronglyTypedContract(coid, templateId, actualTmplId))
@@ -1090,7 +1090,7 @@ private[lf] object SBuiltin {
               coid,
               ifaceId, // not actually used, maybe this param should be dropped from SResultNeedContract
               onLedger.committers,
-              { case V.ContractInst(actualTmplId, V.VersionedValue(_, arg), _) =>
+              { case V.ContractInst(actualTmplId, Versioned(_, arg), _) =>
                 val keyExpr = SEApp(SEVal(KeyDefRef(actualTmplId)), Array(SELocS(1)))
                 machine.pushKont(KCacheContract(machine, actualTmplId, coid))
                 machine.ctrl = SELet1(

@@ -196,7 +196,7 @@ private[lf] object Pretty {
 
   def prettyVersionedKeyWithMaintainers(key: KeyWithMaintainers[Tx.Value]): Doc =
     // the maintainers are induced from the key -- so don't clutter
-    prettyValue(false)(key.key.value)
+    prettyValue(false)(key.key.unversioned)
 
   def prettyEventInfo(l: ScenarioLedger, txId: TransactionId)(nodeId: NodeId): Doc = {
     def arrowRight(d: Doc) = text("└─>") & d
@@ -290,7 +290,7 @@ private[lf] object Pretty {
 
   def prettyVersionedContractInst(coinst: ContractInst[Tx.Value]): Doc =
     (prettyIdentifier(coinst.template) / text("with:") &
-      prettyValue(false)(coinst.arg.value)).nested(4)
+      prettyValue(false)(coinst.arg.unversioned)).nested(4)
 
   def prettyTypeConName(tycon: TypeConName): Doc =
     text(tycon.qualifiedName.toString) + char('@') + prettyPackageId(tycon.packageId)
@@ -313,7 +313,7 @@ private[lf] object Pretty {
     text(id.qualifiedName.toString) + char('@') + prettyPackageId(id.packageId)
 
   def prettyVersionedValue(verbose: Boolean)(v: Tx.Value): Doc =
-    prettyValue(verbose)(v.value)
+    prettyValue(verbose)(v.unversioned)
 
   // Pretty print a value. If verbose then the top-level value is printed with type constructor
   // if possible.

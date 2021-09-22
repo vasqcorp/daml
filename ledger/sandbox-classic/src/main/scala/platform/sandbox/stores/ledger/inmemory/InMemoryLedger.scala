@@ -289,7 +289,7 @@ private[sandbox] final class InMemoryLedger(
                   LfEngineToApi.assertOrRuntimeEx(
                     "converting stored contract",
                     LfEngineToApi
-                      .lfValueToApiRecord(verbose = verbose, contractInst.arg.value),
+                      .lfValueToApiRecord(verbose = verbose, contractInst.arg.unversioned),
                   )
                 ),
                 contract.signatories.union(contract.observers).intersect(filter.keySet).toSeq,

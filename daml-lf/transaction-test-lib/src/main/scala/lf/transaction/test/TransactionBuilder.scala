@@ -8,7 +8,7 @@ package test
 import com.daml.lf.data._
 import com.daml.lf.language.LanguageVersion
 import com.daml.lf.transaction.{Transaction => Tx}
-import com.daml.lf.value.Value
+import com.daml.lf.value.{Value, Versioned}
 import com.daml.lf.value.Value.ContractId
 
 import scala.Ordering.Implicits.infixOrderingOps
@@ -81,7 +81,7 @@ final class TransactionBuilder(pkgTxVersion: Ref.PackageId => TransactionVersion
     contract.map(transactionValue(contract.template))
 
   private[this] def transactionValue(templateId: Ref.TypeConName): Value => TxValue =
-    value.Value.VersionedValue(pkgTxVersion(templateId.packageId), _)
+    value.Versioned(pkgTxVersion(templateId.packageId), _)
 
   def create(
       id: ContractId,
@@ -313,7 +313,7 @@ object TransactionBuilder {
       value: Value,
       supportedVersions: VersionRange[TransactionVersion] = TransactionVersion.DevVersions,
   ): Either[String, TxValue] =
-    assignVersion(value, supportedVersions).map(Value.VersionedValue(_, value))
+    assignVersion(value, supportedVersions).map(Versioned(_, value))
 
   @throws[IllegalArgumentException]
   def assertAsVersionedValue(

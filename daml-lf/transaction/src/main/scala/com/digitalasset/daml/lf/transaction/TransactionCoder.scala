@@ -9,7 +9,7 @@ import com.daml.lf.transaction.TransactionOuterClass.Node.NodeTypeCase
 import com.daml.lf.data.ImmArray
 import com.daml.lf.data.Ref.{Name, Party}
 import com.daml.lf.transaction.Node._
-import com.daml.lf.value.{Value, ValueCoder, ValueOuterClass}
+import com.daml.lf.value.{Value, ValueCoder, ValueOuterClass, Versioned}
 import com.daml.lf.value.ValueCoder.{DecodeError, EncodeError}
 import com.google.protobuf.{ByteString, GeneratedMessageV3, ProtocolStringList}
 
@@ -95,8 +95,8 @@ object TransactionCoder {
       value: ValueOuterClass.VersionedValue,
   ): Either[DecodeError, Value] =
     ValueCoder.decodeVersionedValue(cidDecoder, value).flatMap {
-      case Value.VersionedValue(`nodeVersion`, value) => Right(value)
-      case Value.VersionedValue(version, _) =>
+      case Versioned(`nodeVersion`, value) => Right(value)
+      case Versioned(version, _) =>
         Left(
           DecodeError(
             s"A node of version $nodeVersion cannot contain values of different version (${version})"

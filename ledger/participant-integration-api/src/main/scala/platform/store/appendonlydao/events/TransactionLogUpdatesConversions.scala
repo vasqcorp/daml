@@ -136,7 +136,7 @@ private[events] object TransactionLogUpdatesConversions {
               "create key",
               value =>
                 lfValueTranslation.enricher
-                  .enrichContractKey(createdEvent.templateId, value.value),
+                  .enrichContractKey(createdEvent.templateId, value.unversioned),
             )
             .map(Some(_))
         )
@@ -148,7 +148,7 @@ private[events] object TransactionLogUpdatesConversions {
         "create argument",
         value =>
           lfValueTranslation.enricher
-            .enrichContract(createdEvent.templateId, value.value),
+            .enrichContract(createdEvent.templateId, value.unversioned),
       )
 
       for {
@@ -275,7 +275,7 @@ private[events] object TransactionLogUpdatesConversions {
           .enrichChoiceArgument(
             exercisedEvent.templateId,
             Ref.Name.assertFromString(exercisedEvent.choice),
-            value.value,
+            value.unversioned,
           )
 
       val eventualChoiceArgument = lfValueTranslation.toApiValue(
@@ -291,7 +291,7 @@ private[events] object TransactionLogUpdatesConversions {
             lfValueTranslation.enricher.enrichChoiceResult(
               exercisedEvent.templateId,
               Ref.Name.assertFromString(exercisedEvent.choice),
-              value.value,
+              value.unversioned,
             )
 
           lfValueTranslation
@@ -339,7 +339,10 @@ private[events] object TransactionLogUpdatesConversions {
       val eventualContractKey = createdEvent.contractKey
         .map { contractKey =>
           val contractKeyEnricher = (value: Value) =>
-            lfValueTranslation.enricher.enrichContractKey(createdEvent.templateId, value.value)
+            lfValueTranslation.enricher.enrichContractKey(
+              createdEvent.templateId,
+              value.unversioned,
+            )
 
           lfValueTranslation
             .toApiValue(
@@ -353,7 +356,7 @@ private[events] object TransactionLogUpdatesConversions {
         .getOrElse(Future.successful(None))
 
       val contractEnricher = (value: Value) =>
-        lfValueTranslation.enricher.enrichContract(createdEvent.templateId, value.value)
+        lfValueTranslation.enricher.enrichContract(createdEvent.templateId, value.unversioned)
 
       val eventualCreateArguments = lfValueTranslation.toApiRecord(
         value = createdEvent.createArgument,

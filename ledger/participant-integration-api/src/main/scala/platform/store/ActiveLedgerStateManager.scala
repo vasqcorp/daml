@@ -160,7 +160,11 @@ private[platform] class ActiveLedgerStateManager[ALS <: ActiveLedgerState[ALS]](
                 // A contract starts its life without being divulged at all.
                 divulgences = Map.empty,
                 key = nc.versionedKey.map(
-                  _.assertNoCid(coid => s"Contract ID $coid found in contract key")
+                  _.map(
+                    _.map(
+                      _.assertNoCid(coid => s"Contract ID $coid found in contract key")
+                    )
+                  )
                 ),
                 signatories = nc.signatories,
                 observers = nc.stakeholders.diff(nc.signatories),
@@ -175,7 +179,7 @@ private[platform] class ActiveLedgerStateManager[ALS <: ActiveLedgerState[ALS]](
                     parties = state.parties.union(nodeParties),
                   )
                 case Some(key) =>
-                  val gk = GlobalKey(activeContract.contract.template, key.key.value)
+                  val gk = GlobalKey(activeContract.contract.template, key.key.unversioned)
                   if (als.lookupContractByKey(gk).isDefined) {
                     state.copy(
                       currentState = state.currentState.copy(

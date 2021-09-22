@@ -11,7 +11,7 @@ import com.daml.lf.transaction.Node._
 import com.daml.lf.transaction.{TransactionOuterClass => proto}
 import com.daml.lf.value.Value.{ContractId, ContractInst, ValueParty}
 import com.daml.lf.value.ValueCoder.{DecodeError, EncodeError}
-import com.daml.lf.value.{Value, ValueCoder}
+import com.daml.lf.value.{Value, ValueCoder, Versioned}
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.Inside
 import org.scalatest.matchers.should.Matchers
@@ -954,8 +954,8 @@ class TransactionCoderSpec
   }
 
   private[this] def normalizeValue(versionedValue: Value.VersionedValue) = {
-    val Value.VersionedValue(version, value) = versionedValue
-    Value.VersionedValue(version, normalize(value, version))
+    val Versioned(version, value) = versionedValue
+    Versioned(version, normalize(value, version))
   }
 
   private[this] def normalize(
