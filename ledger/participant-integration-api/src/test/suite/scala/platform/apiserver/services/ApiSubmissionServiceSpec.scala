@@ -3,16 +3,11 @@
 
 package com.daml.platform.apiserver.services
 
-import java.time.{Duration, Instant}
-import java.util.UUID
-import java.util.concurrent.CompletableFuture.completedFuture
-import java.util.concurrent.atomic.AtomicInteger
-
 import com.codahale.metrics.MetricRegistry
-import com.daml.ledger.api.{DeduplicationPeriod, DomainMocks}
-import com.daml.ledger.api.domain.{CommandId, Commands, LedgerId, PartyDetails, SubmissionId}
+import com.daml.ledger.api.domain.{CommandId, Commands, LedgerId, PartyDetails}
 import com.daml.ledger.api.messages.command.submission.SubmitRequest
 import com.daml.ledger.api.testing.utils.AkkaBeforeAndAfterAll
+import com.daml.ledger.api.{DeduplicationPeriod, DomainMocks}
 import com.daml.ledger.configuration.{Configuration, LedgerTimeModel}
 import com.daml.ledger.participant.state.index.v2.{
   CommandDeduplicationNew,
@@ -47,6 +42,9 @@ import org.scalatest.Inside
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
 
+import java.time.{Duration, Instant}
+import java.util.concurrent.CompletableFuture.completedFuture
+import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
@@ -415,7 +413,7 @@ object ApiSubmissionServiceSpec {
         commandId = CommandId(
           Ref.CommandId.assertFromString(s"commandId-${commandId.incrementAndGet()}")
         ),
-        submissionId = SubmissionId(Ref.SubmissionId.assertFromString(UUID.randomUUID().toString)),
+        submissionId = None,
         actAs = Set.empty,
         readAs = Set.empty,
         submittedAt = Instant.MIN,

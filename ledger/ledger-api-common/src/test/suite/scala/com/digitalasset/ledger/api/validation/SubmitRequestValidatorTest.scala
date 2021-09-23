@@ -83,7 +83,7 @@ class SubmitRequestValidatorTest
       workflowId = Some(workflowId),
       applicationId = applicationId,
       commandId = commandId,
-      submissionId = submissionId,
+      submissionId = None,
       actAs = Set(DomainMocks.party),
       readAs = Set.empty,
       submittedAt = submittedAt,

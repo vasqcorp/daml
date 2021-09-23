@@ -241,7 +241,7 @@ private[commands] class CommandTracker[Context](
         val submissionId = commands.submissionId
         val commandId = commands.commandId
         logger.trace(s"Begin tracking of command $commandId for submission $submissionId.")
-        if (commands.submissionId.isEmpty) {
+        if (submissionId.isEmpty) {
           throw new IllegalArgumentException(
             s"The submission ID for the command ID $commandId is empty. This should not happen."
           )

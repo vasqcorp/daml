@@ -4,9 +4,9 @@
 package com.daml.platform.apiserver.services
 
 import com.daml.api.util.TimeProvider
+import com.daml.ledger.api.DeduplicationPeriod
 import com.daml.ledger.api.domain.{LedgerId, Commands => ApiCommands}
 import com.daml.ledger.api.messages.command.submission.SubmitRequest
-import com.daml.ledger.api.{DeduplicationPeriod, SubmissionIdGenerator}
 import com.daml.ledger.configuration.Configuration
 import com.daml.ledger.participant.state.index.v2._
 import com.daml.ledger.participant.state.{v2 => state}
@@ -74,7 +74,6 @@ private[apiserver] object ApiSubmissionService {
       currentUtcTime = () => Instant.now,
       maxDeduplicationTime = () =>
         ledgerConfigurationSubscription.latestConfiguration().map(_.maxDeduplicationTime),
-      submissionIdGenerator = SubmissionIdGenerator.Random,
       metrics = metrics,
     )
 

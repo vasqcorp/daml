@@ -414,7 +414,7 @@ private[sandbox] final class InMemoryLedger(
                   Some(submitterInfo.commandId),
                   transactionId,
                   Some(submitterInfo.applicationId),
-                  Some(submitterInfo.submissionId),
+                  submitterInfo.submissionId,
                   submitterInfo.actAs,
                   transactionMeta.workflowId,
                   transactionMeta.ledgerEffectiveTime.toInstant,
