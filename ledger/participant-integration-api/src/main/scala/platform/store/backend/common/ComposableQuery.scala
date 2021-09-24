@@ -26,6 +26,25 @@ object ComposableQuery {
   }
 
   implicit class SqlStringInterpolation(val sc: StringContext) extends AnyVal {
+    def SQLDebug(args: QueryPart*): SimpleSql[Row] = {
+      val (stringParts, valueParts) = flattenComposite(sc.parts, args)
+
+      println(s"DEBUG QUERY")
+      println(s"STRING PARTS NUMBER: ${stringParts.size}")
+      println(stringParts.mkString("|||"))
+      println(s"VALUE PARTS NUMBER: ${valueParts.size}")
+      println(valueParts.mkString("|||"))
+      println(valueParts.map(_.toSql).mkString("|||"))
+
+      val x = anorm
+        .SqlStringInterpolation(StringContext(stringParts: _*))
+        .SQL(valueParts: _*)
+
+      println(s"PARAMS: ${x.params}")
+      println(s"PARAMS ORDER: ${x.sql.paramsInitialOrder}")
+
+      x
+    }
     def SQL(args: QueryPart*): SimpleSql[Row] = {
       val (stringParts, valueParts) = flattenComposite(sc.parts, args)
 

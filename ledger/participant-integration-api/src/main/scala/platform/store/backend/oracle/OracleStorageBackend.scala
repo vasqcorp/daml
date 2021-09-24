@@ -6,37 +6,16 @@ package com.daml.platform.store.backend.oracle
 import anorm.SqlParser.get
 import anorm.SQL
 import com.daml.lf.data.Ref
-import com.daml.platform.store.backend.common.{
-  AppendOnlySchema,
-  CompletionStorageBackendTemplate,
-  ConfigurationStorageBackendTemplate,
-  ContractStorageBackendTemplate,
-  DataSourceStorageBackendTemplate,
-  DeduplicationStorageBackendTemplate,
-  EventStorageBackendTemplate,
-  EventStrategy,
-  IngestionStorageBackendTemplate,
-  InitHookDataSourceProxy,
-  PackageStorageBackendTemplate,
-  ParameterStorageBackendTemplate,
-  PartyStorageBackendTemplate,
-  QueryStrategy,
-  Timestamp,
-}
-import com.daml.platform.store.backend.{
-  DBLockStorageBackend,
-  DataSourceStorageBackend,
-  DbDto,
-  StorageBackend,
-  common,
-}
+import com.daml.platform.store.backend.common.{AppendOnlySchema, CompletionStorageBackendTemplate, ConfigurationStorageBackendTemplate, ContractStorageBackendTemplate, DataSourceStorageBackendTemplate, DeduplicationStorageBackendTemplate, EventStorageBackendTemplate, EventStrategy, IngestionStorageBackendTemplate, InitHookDataSourceProxy, PackageStorageBackendTemplate, ParameterStorageBackendTemplate, PartyStorageBackendTemplate, QueryStrategy, Timestamp}
+import com.daml.platform.store.backend.{DBLockStorageBackend, DataSourceStorageBackend, DbDto, StorageBackend, common}
+
 import java.sql.Connection
 import java.time.Instant
-
 import com.daml.ledger.offset.Offset
 import com.daml.platform.store.backend.EventStorageBackend.FilterParams
 import com.daml.logging.LoggingContext
-import com.daml.platform.store.backend.common.ComposableQuery.{CompositeSql, SqlStringInterpolation}
+import com.daml.platform.store.backend.common.ComposableQuery.{CompositeSql, SingleParameter, SqlStringInterpolation}
+
 import javax.sql.DataSource
 
 private[backend] object OracleStorageBackend
@@ -117,8 +96,22 @@ private[backend] object OracleStorageBackend
         columnName: String,
         parties: Set[Ref.Party],
     ): CompositeSql = {
-      val inParties = parties.map(p => s"'$p'").mkString(", ")
-      cSQL"EXISTS (SELECT 1 FROM JSON_TABLE(#$columnName, '$$[*]' columns (value PATH '$$')) WHERE value IN (#$inParties))"
+      def partyToString(p: Ref.Party) = s"${p.toString}'"
+      val x = CompositeSql(
+        stringParts = List("(") ++ List.fill(parties.size - 1)(", ") ++ List(")"),
+        valueParts = parties.toList.map(p => SingleParameter(partyToString(p)))
+      )
+      cSQL"EXISTS (SELECT 1 FROM JSON_TABLE(#$columnName, '$$[*]' columns (value PATH '$$')) WHERE value IN $x )"
+//
+//
+//
+//
+//      val inParties = parties.map(p => s"'$p'").mkString(", ")
+//      cSQL"EXISTS (SELECT 1 FROM JSON_TABLE(#$columnName, '$$[*]' columns (value PATH '$$')) WHERE value IN (#$inParties))"
+//
+//
+      cSQL"EXISTS (SELECT 1 FROM JSON_TABLE(#$columnName, '$$[*]' columns (value PATH '$$')) WHERE value IN (${parties
+        .map(_.toString)}))"
     }
 
     override def columnEqualityBoolean(column: String, value: String): String =

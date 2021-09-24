@@ -3,27 +3,17 @@
 
 package com.daml.platform.store.backend.common
 
-import java.sql.Connection
+import java.sql.{Connection, PreparedStatement}
 import java.time.Instant
 import anorm.SqlParser.{binaryStream, int, long, str}
 import anorm.{ResultSetParser, Row, RowParser, SimpleSql, SqlParser, ~}
 import com.daml.lf.data.Ref
-import com.daml.platform.store.Conversions.{
-  contractId,
-  flatEventWitnessesColumn,
-  identifier,
-  instantFromMicros,
-  offset,
-}
+import com.daml.platform.store.Conversions.{contractId, flatEventWitnessesColumn, identifier, instantFromMicros, offset}
 import com.daml.platform.store.SimpleSqlAsVectorOf.SimpleSqlAsVectorOf
 import com.daml.platform.store.appendonlydao.events.{ContractId, Key}
 import com.daml.platform.store.backend.common.ComposableQuery.{CompositeSql, SqlStringInterpolation}
 import com.daml.platform.store.backend.{ContractStorageBackend, StorageBackend}
-import com.daml.platform.store.interfaces.LedgerDaoContractsReader.{
-  KeyAssigned,
-  KeyState,
-  KeyUnassigned,
-}
+import com.daml.platform.store.interfaces.LedgerDaoContractsReader.{KeyAssigned, KeyState, KeyUnassigned}
 
 import scala.util.{Failure, Success, Try}
 
@@ -218,12 +208,12 @@ FETCH NEXT 1 ROW ONLY""".as(instantFromMicros("ledger_effective_time").?.singleO
            ORDER BY event_sequential_id ASC"""
       .asVectorOf(contractStateRowParser)(connection)
 
-  private val contractRowParser: RowParser[StorageBackend.RawContract] =
-    (str("template_id")
-      ~ binaryStream("create_argument")
-      ~ int("create_argument_compression").?)
-      .map(SqlParser.flatten)
-      .map(StorageBackend.RawContract.tupled)
+//  private val contractRowParser: RowParser[StorageBackend.RawContract] =
+//    (str("template_id")
+//      ~ binaryStream("create_argument")
+//      ~ int("create_argument_compression").?)
+//      .map(SqlParser.flatten)
+//      .map(StorageBackend.RawContract.tupled)
 
   protected def activeContractSqlLiteral(
       contractId: ContractId,
@@ -313,13 +303,49 @@ FETCH NEXT 1 ROW ONLY""".as(instantFromMicros("ledger_effective_time").?.singleO
       readers: Set[Ref.Party],
       contractId: ContractId,
   )(connection: Connection): Option[StorageBackend.RawContract] = {
-    activeContract(
-      resultSetParser = contractRowParser.singleOpt,
-      resultColumns = List("template_id", "create_argument", "create_argument_compression"),
-    )(
-      readers = readers,
-      contractId = contractId,
-    )(connection)
+    val parties = Set("Nabuchodonozor").map(_.toString).take(1)
+//    val placeholders: String = List.fill(parties.size)("?").mkString(", ")
+
+//    val sql = s"""
+//               SELECT contract_id, template_id, create_argument, create_argument_compression
+//                 FROM participant_events_divulgence, parameters
+//                WHERE EXISTS (SELECT 1 FROM JSON_TABLE(tree_event_witnesses , '$$[*]' columns (value PATH '$$')) WHERE value = ? AND 1 = 1)
+//                FETCH NEXT 1 ROW ONLY -- limit here to guide planner wrt expected number of results
+//            """
+
+    val sql = s"""
+               SELECT count(*)
+                 FROM participant_events_divulgence
+                WHERE EXISTS (SELECT 1 FROM JSON_TABLE(tree_event_witnesses , '$$' columns (value PATH '$$[*]')) WHERE value in (?))
+            """
+
+//    val sql = s"""
+//               SELECT contract_id, template_id, create_argument, create_argument_compression
+//                 FROM participant_events_divulgence, parameters
+//                WHERE EXISTS (SELECT 1 FROM JSON_TABLE(tree_event_witnesses , '$$[*]' columns (value PATH '$$')) WHERE value IN ('David', 'Emma'))
+//                FETCH NEXT 1 ROW ONLY -- limit here to guide planner wrt expected number of results
+//            """
+
+    println(s"SQL: $sql")
+    val stmt: PreparedStatement = connection.prepareStatement(sql)
+    stmt.setString(1, parties.head)
+//    parties.view.zipWithIndex.foreach { case (party, index) =>
+//      println(s"ARG ${index + 1}: $party")
+//      stmt.setString(index + 1, party)
+//    }
+    val result = stmt.execute()
+
+    println(s"EXECUTED: $result")
+
+    None
+
+//    SQLDebug"""
+//               SELECT contract_id, template_id, create_argument, create_argument_compression
+//                 FROM participant_events_divulgence, parameters
+//                WHERE EXISTS (SELECT 1 FROM JSON_TABLE(tree_event_witnesses , '$$[*]' columns (value PATH '$$')) WHERE value IN ($parties))
+//                FETCH NEXT 1 ROW ONLY -- limit here to guide planner wrt expected number of results
+//            """
+//      .as(resultSetParser)(connection)
   }
 
   override def activeContractWithoutArgument(

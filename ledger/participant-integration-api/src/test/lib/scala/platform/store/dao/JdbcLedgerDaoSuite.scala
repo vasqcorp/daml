@@ -66,7 +66,7 @@ private[dao] trait JdbcLedgerDaoSuite extends JdbcLedgerDaoBackend {
 
   protected final val alice = Party.assertFromString("Alice")
   protected final val bob = Party.assertFromString("Bob")
-  protected final val charlie = Party.assertFromString("Charlie")
+  protected final val charlie = Party.assertFromString("Nabuchodonozor")
   protected final val david = Party.assertFromString("David")
   protected final val emma = Party.assertFromString("Emma")
 

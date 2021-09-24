@@ -18,6 +18,7 @@ object MainWithEphemeralOracleUser extends OracleAround {
 
     connectToOracle()
     val user = createNewRandomUser()
+    def dropUser(name: String) = println(s"NOT DROPPING: $name")
     sys.addShutdownHook(dropUser(user.name))
     val oracleJdbcUrl = s"jdbc:oracle:thin:${user.name}/${user.pwd}@localhost:$oraclePort/ORCLPDB1"
     val config = originalConfig.copy(
