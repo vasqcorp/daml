@@ -304,7 +304,7 @@ FETCH NEXT 1 ROW ONLY""".as(instantFromMicros("ledger_effective_time").?.singleO
       contractId: ContractId,
   )(connection: Connection): Option[StorageBackend.RawContract] = {
     val parties = Set("Nabuchodonozor").map(_.toString).take(1)
-//    val placeholders: String = List.fill(parties.size)("?").mkString(", ")
+    val placeholders: String = List.fill(parties.size)("?").mkString(", ")
 
 //    val sql = s"""
 //               SELECT contract_id, template_id, create_argument, create_argument_compression
@@ -313,26 +313,34 @@ FETCH NEXT 1 ROW ONLY""".as(instantFromMicros("ledger_effective_time").?.singleO
 //                FETCH NEXT 1 ROW ONLY -- limit here to guide planner wrt expected number of results
 //            """
 
-    val sql = s"""
-               SELECT count(*)
-                 FROM participant_events_divulgence
-                WHERE EXISTS (SELECT 1 FROM JSON_TABLE(tree_event_witnesses , '$$' columns (value PATH '$$[*]')) WHERE value in (?))
-            """
-
 //    val sql = s"""
-//               SELECT contract_id, template_id, create_argument, create_argument_compression
-//                 FROM participant_events_divulgence, parameters
-//                WHERE EXISTS (SELECT 1 FROM JSON_TABLE(tree_event_witnesses , '$$[*]' columns (value PATH '$$')) WHERE value IN ('David', 'Emma'))
-//                FETCH NEXT 1 ROW ONLY -- limit here to guide planner wrt expected number of results
+//               SELECT count(*)
+//                 FROM participant_events_divulgence
+//                WHERE EXISTS (
+//                  SELECT 1 FROM (
+//                    SELECT *
+//                    FROM JSON_TABLE(
+//                      tree_event_witnesses ,
+//                      '$$' columns (VALUE2 PATH '$$[*]')
+//                    )
+//                  ) WHERE VALUE2 IN (?)
+//                )
 //            """
+
+    val sql = s"""
+               SELECT contract_id, template_id, create_argument, create_argument_compression
+                 FROM participant_events_divulgence, parameters
+                WHERE EXISTS (SELECT 1 FROM JSON_TABLE(tree_event_witnesses , '$$[*]' columns (value PATH '$$')) WHERE value in ($placeholders))
+                FETCH NEXT 1 ROW ONLY -- limit here to guide planner wrt expected number of results
+            """
 
     println(s"SQL: $sql")
     val stmt: PreparedStatement = connection.prepareStatement(sql)
-    stmt.setString(1, parties.head)
-//    parties.view.zipWithIndex.foreach { case (party, index) =>
-//      println(s"ARG ${index + 1}: $party")
-//      stmt.setString(index + 1, party)
-//    }
+//    stmt.setString(1, parties.head)
+    parties.view.zipWithIndex.foreach { case (party, index) =>
+      println(s"ARG ${index + 1}: $party")
+      stmt.setString(index + 1, party)
+    }
     val result = stmt.execute()
 
     println(s"EXECUTED: $result")

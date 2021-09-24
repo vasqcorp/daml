@@ -17,7 +17,7 @@ class JdbcLedgerDaoOracleAppendOnlySpec
 //    with JdbcLedgerDaoConfigurationSpec
 //    with JdbcLedgerDaoConfigurationAppendOnlySpec
     with JdbcLedgerDaoContractsSpec
-    with JdbcLedgerDaoContractsAppendOnlySpec
+//    with JdbcLedgerDaoContractsAppendOnlySpec
 //    with JdbcLedgerDaoDivulgenceSpec
 //    with JdbcLedgerDaoExceptionSpec
 //    with JdbcLedgerDaoPartiesSpec
