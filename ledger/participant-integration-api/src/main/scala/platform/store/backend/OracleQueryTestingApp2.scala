@@ -12,7 +12,7 @@ object OracleQueryTestingApp2 extends App {
 
   Class.forName("oracle.jdbc.driver.OracleDriver")
 
-  test1()
+//  test1()
   test2()
   test3()
 
@@ -82,11 +82,13 @@ object OracleQueryTestingApp2 extends App {
   }
 
   def test2(): Unit = {
-    println("\n\nTEST 2")
-    withNewRandomUser { connection =>
+    println("\n\nTEST 2222")
+    withTestUser { connection =>
+//    withNewRandomUser { connection =>
       for {
-        _ <- createTestTable(connection)
-        _ <- insertSampleData(connection)
+//        _ <- createTestTable(connection)
+        _ <- createIndex(connection)
+//        _ <- insertSampleData(connection)
         _ <- {
           println("RUNNING TEST 2")
           val parties = Set("Emma", "David")
@@ -95,6 +97,11 @@ object OracleQueryTestingApp2 extends App {
                 FROM TABLE1
                 WHERE EXISTS (SELECT 1 FROM JSON_TABLE(JSONCOLUMN , '$$' COLUMNS (VALUE PATH '$$[*]')) WHERE VALUE IN ($placeholders))
                 """
+
+//          val sql = s"""SELECT CONTRACT_ID
+//                FROM participant_events_divulgence
+//                WHERE EXISTS (SELECT 1 FROM JSON_TABLE(tree_event_witnesses , '$$' COLUMNS (VALUE PATH '$$[*]')) WHERE VALUE IN ($placeholders))
+//                """
           Using(connection.prepareStatement(sql)) { stmt =>
             println(s"Executing test query")
             parties.zipWithIndex.foreach { case (party, index) =>
@@ -108,7 +115,7 @@ object OracleQueryTestingApp2 extends App {
               }
               it.foreach(r => println(s"GOT ROW: $r"))
             }
-          }
+          }.flatten
         }
       } yield ()
     }
@@ -144,10 +151,21 @@ object OracleQueryTestingApp2 extends App {
     val createTableSql = s"""CREATE TABLE "TABLE1"
                             |   (
                             |  "ID" VARCHAR2(4000) NOT NULL ENABLE,
-                            |  "JSONCOLUMN" CLOB CONSTRAINT ensure_json CHECK (JSONCOLUMN IS JSON) NOT NULL ENABLE
+                            |  "JSONCOLUMN" CLOB DEFAULT '[]' NOT NULL ENABLE
+                            |  CONSTRAINT "ENSURE_JSON_JSONCOLUMN" CHECK (JSONCOLUMN IS JSON) ENABLE
                             |)""".stripMargin
     Using(connection.prepareStatement(createTableSql)) { stmt =>
       println("Creating table")
+      stmt.execute()
+    }
+  }
+
+  def createIndex(connection: Connection): Try[Boolean] = {
+    val sql = """CREATE INDEX "JSONCOLUMN_IDX" ON TABLE1 ("JSONCOLUMN")
+                |   INDEXTYPE IS "CTXSYS"."CONTEXT_V2"  PARAMETERS ('SIMPLIFIED_JSON')""".stripMargin
+
+    Using(connection.prepareStatement(sql)) { stmt =>
+      println("Creating index")
       stmt.execute()
     }
   }
