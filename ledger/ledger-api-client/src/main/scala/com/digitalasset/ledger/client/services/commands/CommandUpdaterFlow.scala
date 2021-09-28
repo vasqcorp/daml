@@ -22,7 +22,7 @@ object CommandUpdaterFlow {
       submissionIdGenerator: SubmissionIdGenerator,
       applicationId: String,
       ledgerIdToUse: LedgerId,
-  ): Flow[Ctx[Context, CommandSubmission], Ctx[Context, CommandSubmission], NotUsed] = {
+  ): Flow[Ctx[Context, CommandSubmission], Ctx[Context, CommandSubmission], NotUsed] =
     Flow[Ctx[Context, CommandSubmission]]
       .map(_.map { case submission @ CommandSubmission(commands, _) =>
         if (LedgerId(commands.ledgerId) != ledgerIdToUse)
@@ -56,6 +56,4 @@ object CommandUpdaterFlow {
           )
         )
       })
-  }
-
 }
