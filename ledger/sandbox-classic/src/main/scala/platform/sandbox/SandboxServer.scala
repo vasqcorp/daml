@@ -386,6 +386,7 @@ final class SandboxServer(
         healthChecks = healthChecks,
         seedService = seedingService,
         managementServiceTimeout = config.managementServiceTimeout,
+        enableSelfServiceErrorCodes = config.enableSelfServiceErrorCodes,
         appendOnlySchemaEnabled = config.enableAppendOnlySchema,
       )(materializer, executionSequencerFactory, loggingContext)
         .map(_.withServices(List(resetService)))

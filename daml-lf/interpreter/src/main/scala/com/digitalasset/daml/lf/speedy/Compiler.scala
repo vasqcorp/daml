@@ -15,6 +15,7 @@ import com.daml.lf.speedy.SBuiltin._
 import com.daml.lf.speedy.SExpr._
 import com.daml.lf.speedy.SValue._
 import com.daml.lf.validation.{EUnknownDefinition, Validation, ValidationError}
+import com.daml.scalautil.Statement.discard
 import com.daml.nameof.NameOf
 import org.slf4j.LoggerFactory
 
@@ -297,6 +298,7 @@ private[lf] final class Compiler(
       module: Module,
   ): Iterable[(SDefinitionRef, SDefinition)] = {
     val builder = Iterable.newBuilder[(SDefinitionRef, SDefinition)]
+    def addDef(binding: (SDefinitionRef, SDefinition)) = discard(builder += binding)
 
     module.exceptions.foreach { case (defName, GenDefException(message)) =>
       val ref = ExceptionMessageDefRef(Identifier(pkgId, QualifiedName(module.name, defName)))
@@ -312,28 +314,30 @@ private[lf] final class Compiler(
 
     module.templates.foreach { case (tmplName, tmpl) =>
       val identifier = Identifier(pkgId, QualifiedName(module.name, tmplName))
-      builder += compileCreate(identifier, tmpl)
-      builder += compileFetch(identifier, tmpl)
-      builder += compileKey(identifier, tmpl)
-      builder += compileSignatories(identifier, tmpl)
-      builder += compileObservers(identifier, tmpl)
-      tmpl.implements.foreach(builder += compileImplements(identifier, _))
+      addDef(compileCreate(identifier, tmpl))
+      addDef(compileFetch(identifier, tmpl))
+      addDef(compileKey(identifier, tmpl))
+      addDef(compileSignatories(identifier, tmpl))
+      addDef(compileObservers(identifier, tmpl))
+      tmpl.implements.values.foreach { impl =>
+        addDef(compileImplements(identifier, impl.interface))
+        impl.methods.values.foreach(method =>
+          addDef(compileImplementsMethod(identifier, impl.interface, method))
+        )
+      }
 
-      tmpl.choices.values.foreach(builder += compileChoice(identifier, tmpl, _))
+      tmpl.choices.values.foreach(x => addDef(compileChoice(identifier, tmpl, x)))
 
       tmpl.key.foreach { tmplKey =>
-        builder += compileFetchByKey(identifier, tmpl, tmplKey)
-        builder += compileLookupByKey(identifier, tmplKey)
-        tmpl.choices.values.foreach(
-          builder +=
-            compileChoiceByKey(identifier, tmpl, tmplKey, _)
-        )
+        addDef(compileFetchByKey(identifier, tmpl, tmplKey))
+        addDef(compileLookupByKey(identifier, tmplKey))
+        tmpl.choices.values.foreach(x => addDef(compileChoiceByKey(identifier, tmpl, tmplKey, x)))
       }
     }
 
     module.interfaces.foreach { case (ifaceName, iface) =>
       val identifier = Identifier(pkgId, QualifiedName(module.name, ifaceName))
-      builder += compileFetchInterface(identifier)
+      addDef(compileFetchInterface(identifier))
       iface.choices.values.foreach(
         builder += compileChoiceInterface(identifier, _)
       )
@@ -504,6 +508,8 @@ private[lf] final class Compiler(
         compile(e) // interfaces have the same representation as underlying template
       case EFromInterface(iface @ _, tpl, e) =>
         SBFromInterface(tpl)(compile(e))
+      case ECallInterface(iface, methodName, e) =>
+        SBCallInterface(iface, methodName)(compile(e))
       case EExperimental(name, _) =>
         SBExperimental(name)
 
@@ -793,16 +799,11 @@ private[lf] final class Compiler(
       case UpdateCreate(tmplId, arg) =>
         CreateDefRef(tmplId)(compile(arg))
       case UpdateExercise(tmplId, chId, cidE, argE) =>
-        compileExercise(
-          tmplId = tmplId,
-          contractId = compile(cidE),
-          choiceId = chId,
-          argument = compile(argE),
-        )
+        ChoiceDefRef(tmplId, chId)(compile(cidE), compile(argE))
       case UpdateExerciseInterface(ifaceId, chId, cidE, argE) =>
         ChoiceDefRef(ifaceId, chId)(compile(cidE), compile(argE))
       case UpdateExerciseByKey(tmplId, chId, keyE, argE) =>
-        compileExerciseByKey(tmplId, compile(keyE), chId, compile(argE))
+        ChoiceByKeyDefRef(tmplId, chId)(compile(keyE), compile(argE))
       case UpdateGetTime =>
         SEGetTime
       case UpdateLookupByKey(RetrieveByKey(templateId, key)) =>
@@ -1481,6 +1482,16 @@ private[lf] final class Compiler(
       svar(tmplPos)
     }
 
+  // Compile the implementation of an interface method.
+  private[this] def compileImplementsMethod(
+      tmplId: Identifier,
+      ifaceId: Identifier,
+      method: TemplateImplementsMethod,
+  ): (SDefinitionRef, SDefinition) = {
+    val ref = ImplementsMethodDefRef(tmplId, ifaceId, method.name)
+    ref -> SDefinition(withLabel(ref, unsafeCompile(method.value)))
+  }
+
   private[this] def compileCreate(
       tmplId: Identifier,
       tmpl: Template,
@@ -1505,34 +1516,6 @@ private[lf] final class Compiler(
       }
     }
 
-  private[this] def compileExercise(
-      tmplId: Identifier,
-      contractId: SExpr,
-      choiceId: ChoiceName,
-      // actors are only present when compiling old LF update expressions;
-      // they are computed from the controllers in newer versions
-      argument: SExpr,
-  ): SExpr =
-    // Translates 'A does exercise by key  Choice with <params>'
-    // into:
-    // SomeTemplate$SomeChoice <actorsE> <cidE> <argE>
-    withEnv { _ =>
-      ChoiceDefRef(tmplId, choiceId)(contractId, argument)
-    }
-
-  private[this] def compileExerciseByKey(
-      tmplId: Identifier,
-      key: SExpr,
-      choiceId: ChoiceName,
-      argument: SExpr,
-  ): SExpr =
-    // Translates 'A does exerciseByKey <key> <Choice> <with> <params>'
-    // into:
-    // ChoiceByKeyDefRef(tmplId, choiceId) <actors> <key> <arg>
-    withEnv { _ =>
-      ChoiceByKeyDefRef(tmplId, choiceId)(key, argument)
-    }
-
   private[this] def compileCreateAndExercise(
       tmplId: Identifier,
       createArg: SValue,
@@ -1541,15 +1524,7 @@ private[lf] final class Compiler(
   ): SExpr =
     labeledUnaryFunction(Profile.CreateAndExerciseLabel(tmplId, choiceId)) { tokenPos =>
       let(CreateDefRef(tmplId)(SEValue(createArg), svar(tokenPos))) { cidPos =>
-        app(
-          compileExercise(
-            tmplId = tmplId,
-            contractId = svar(cidPos),
-            choiceId = choiceId,
-            argument = SEValue(choiceArg),
-          ),
-          svar(tokenPos),
-        )
+        ChoiceDefRef(tmplId, choiceId)(svar(cidPos), SEValue(choiceArg), svar(tokenPos))
       }
     }
 
@@ -1603,14 +1578,9 @@ private[lf] final class Compiler(
     case Command.Create(templateId, argument) =>
       CreateDefRef(templateId)(SEValue(argument))
     case Command.Exercise(templateId, contractId, choiceId, argument) =>
-      compileExercise(
-        tmplId = templateId,
-        contractId = SEValue(contractId),
-        choiceId = choiceId,
-        argument = SEValue(argument),
-      )
+      ChoiceDefRef(templateId, choiceId)(SEValue(contractId), SEValue(argument))
     case Command.ExerciseByKey(templateId, contractKey, choiceId, argument) =>
-      compileExerciseByKey(templateId, SEValue(contractKey), choiceId, SEValue(argument))
+      ChoiceByKeyDefRef(templateId, choiceId)(SEValue(contractKey), SEValue(argument))
     case Command.Fetch(templateId, coid) =>
       FetchDefRef(templateId)(SEValue(coid))
     case Command.FetchByKey(templateId, key) =>
@@ -1659,7 +1629,7 @@ private[lf] final class Compiler(
               // we cannot process `rest` recursively without exposing ourselves to stack overflow.
               val exprs = rest.iterator.map { cmd =>
                 val expr = app(compileCommand(cmd), svar(tokenPos))
-                nextPosition()
+                discard(nextPosition())
                 expr
               }.toList
               SELet(exprs, SEValue.Unit)

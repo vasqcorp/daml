@@ -591,12 +591,30 @@ private[archive] class DecodeV1(minor: LV.Minor) {
           .map(decodeChoice(tpl, _))
           .map(ch => (ch.name, ch)),
         observers = decodeExpr(lfTempl.getObservers, s"$tpl:observer"),
-        implements = lfImplements.map(decodeTypeConName),
+        implements = lfImplements.map(decodeTemplateImplements).map(impl => (impl.interface, impl)),
         key =
           if (lfTempl.hasKey) Some(decodeTemplateKey(tpl, lfTempl.getKey, paramName))
           else None,
       )
     }
+
+    private[this] def decodeTemplateImplements(
+        lfImpl: PLF.DefTemplate.Implements
+    ): TemplateImplements =
+      TemplateImplements(
+        interface = decodeTypeConName(lfImpl.getInterface),
+        methods = lfImpl.getMethodsList.asScala
+          .map(decodeTemplateImplementsMethod)
+          .map(method => (method.name, method)),
+      )
+
+    private[this] def decodeTemplateImplementsMethod(
+        lfMethod: PLF.DefTemplate.ImplementsMethod
+    ): TemplateImplementsMethod =
+      TemplateImplementsMethod(
+        name = getInternedName(lfMethod.getMethodInternedName, "TemplateImplementsMethod.name"),
+        value = decodeExpr(lfMethod.getValue, "TemplateImplementsMethod.value"),
+      )
 
     private[archive] def decodeChoice(
         tpl: DottedName,
@@ -649,7 +667,10 @@ private[archive] class DecodeV1(minor: LV.Minor) {
       DefInterface(
         lfInterface.getChoicesList.asScala.toList
           .map(decodeInterfaceChoice)
-          .map(choice => (choice.name, choice))
+          .map(choice => (choice.name, choice)),
+        lfInterface.getMethodsList.asScala.toList
+          .map(decodeInterfaceMethod)
+          .map(method => (method.name, method)),
       )
 
     private[this] def decodeInterfaceChoice(
@@ -660,6 +681,14 @@ private[archive] class DecodeV1(minor: LV.Minor) {
         consuming = lfChoice.getConsuming,
         argType = decodeType(lfChoice.getArgType),
         returnType = decodeType(lfChoice.getRetType),
+      )
+
+    private[this] def decodeInterfaceMethod(
+        lfMethod: PLF.InterfaceMethod
+    ): InterfaceMethod =
+      InterfaceMethod(
+        name = getInternedName(lfMethod.getMethodInternedName, "InterfaceMethod.name"),
+        returnType = decodeType(lfMethod.getType),
       )
 
     private[lf] def decodeKind(lfKind: PLF.Kind): Kind =
@@ -1112,6 +1141,15 @@ private[archive] class DecodeV1(minor: LV.Minor) {
             iface = decodeTypeConName(fromInterface.getInterfaceType),
             tpl = decodeTypeConName(fromInterface.getTemplateType),
             value = decodeExpr(fromInterface.getInterfaceExpr, definition),
+          )
+
+        case PLF.Expr.SumCase.CALL_INTERFACE =>
+          assertSince(LV.Features.interfaces, "Expr.call_interface")
+          val callInterface = lfExpr.getCallInterface
+          ECallInterface(
+            iface = decodeTypeConName(callInterface.getInterfaceType),
+            method = getInternedName(callInterface.getMethodInternedName, "ECallInterface.method"),
+            value = decodeExpr(callInterface.getInterfaceExpr, definition),
           )
 
         case PLF.Expr.SumCase.SUM_NOT_SET =>

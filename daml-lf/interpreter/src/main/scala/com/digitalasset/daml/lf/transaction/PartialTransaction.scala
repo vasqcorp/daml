@@ -19,6 +19,7 @@ import com.daml.lf.transaction.{
 }
 import com.daml.lf.value.Value
 import com.daml.nameof.NameOf
+import com.daml.scalautil.Statement.discard
 
 import scala.collection.immutable.HashMap
 import scala.Ordering.Implicits.infixOrderingOps
@@ -33,11 +34,11 @@ private[lf] object PartialTransaction {
   }
 
   type NodeIdx = Value.NodeIdx
-  type Node = Node.GenNode[NodeId]
+  type Node = Node.GenNode
   type LeafNode = Node.LeafOnlyActionNode
 
-  private type TX = GenTransaction[NodeId]
-  private type ExerciseNode = Node.NodeExercises[NodeId]
+  private type TX = GenTransaction
+  private type ExerciseNode = Node.NodeExercises
 
   private final case class IncompleteTxImpl(
       val transaction: TX,
@@ -189,7 +190,6 @@ private[lf] object PartialTransaction {
       contractKeyUniqueness: ContractKeyUniquenessMode,
       submissionTime: Time.Timestamp,
       initialSeeds: InitialSeeding,
-      transactionNormalization: Boolean,
       committers: Set[Party],
   ) = PartialTransaction(
     pkg2TxVersion,
@@ -205,7 +205,6 @@ private[lf] object PartialTransaction {
     globalKeyInputs = Map.empty,
     localContracts = Set.empty,
     actionNodeLocations = BackStack.empty,
-    transactionNormalization = transactionNormalization,
   )
 
   type NodeSeeds = ImmArray[(NodeId, crypto.Hash)]
@@ -288,7 +287,6 @@ private[lf] case class PartialTransaction(
     globalKeyInputs: Map[GlobalKey, PartialTransaction.KeyMapping],
     localContracts: Set[Value.ContractId],
     actionNodeLocations: BackStack[Option[Location]],
-    transactionNormalization: Boolean,
 ) {
 
   import PartialTransaction._
@@ -309,13 +307,14 @@ private[lf] case class PartialTransaction(
           node: Node,
           rootPrefix: String,
       ): Unit = {
-        sb.append(rootPrefix)
-          .append("node ")
-          .append(nid)
-          .append(": ")
-          .append(node.toString)
-          .append(", ")
-        ()
+        discard(
+          sb.append(rootPrefix)
+            .append("node ")
+            .append(nid)
+            .append(": ")
+            .append(node.toString)
+            .append(", ")
+        )
       }
 
       def removeTrailingComma(): Unit = {
@@ -326,9 +325,9 @@ private[lf] case class PartialTransaction(
       // so we need to compute them.
       val rootNodes = {
         val allChildNodeIds: Set[NodeId] = nodes.values.iterator.flatMap {
-          case rb: Node.NodeRollback[NodeId] => rb.children.toSeq
+          case rb: Node.NodeRollback => rb.children.toSeq
           case _: Node.LeafOnlyActionNode => Nil
-          case ex: Node.NodeExercises[NodeId] => ex.children.toSeq
+          case ex: Node.NodeExercises => ex.children.toSeq
         }.toSet
 
         nodes.keySet diff allChildNodeIds
@@ -351,20 +350,15 @@ private[lf] case class PartialTransaction(
   }
 
   /** normValue: converts a speedy value into a normalized regular value,
-    * unless 'transactionNormalization=false',
     * suitable for a transaction node of 'version' determined by 'templateId'
     */
   def normValue(templateId: TypeConName, svalue: SValue): Value = {
     val version = packageToTransactionVersion(templateId.packageId)
-    if (transactionNormalization) {
-      svalue.toNormalizedValue(version)
-    } else {
-      svalue.toUnnormalizedValue
-    }
+    svalue.toNormalizedValue(version)
   }
 
   private def normByKey(version: TxVersion, byKey: Boolean): Boolean = {
-    if (transactionNormalization && (version < TxVersion.minByKey)) {
+    if (version < TxVersion.minByKey) {
       false
     } else {
       byKey
@@ -664,7 +658,7 @@ private[lf] case class PartialTransaction(
 
   private[this] def makeExNode(ec: ExercisesContextInfo): ExerciseNode = {
     val version = packageToTransactionVersion(ec.templateId.packageId)
-    Node.NodeExercises[NodeId](
+    Node.NodeExercises(
       targetCoid = ec.targetId,
       templateId = ec.templateId,
       choiceId = ec.choiceId,

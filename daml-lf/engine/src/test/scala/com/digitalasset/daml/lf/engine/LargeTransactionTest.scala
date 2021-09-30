@@ -10,11 +10,11 @@ import com.daml.bazeltools.BazelRunfiles
 import com.daml.lf.archive.UniversalArchiveDecoder
 import com.daml.lf.data.Ref._
 import com.daml.lf.data.{FrontStack, ImmArray, Ref, Time}
-import com.daml.lf.language.{Ast, LanguageVersion}
+import com.daml.lf.language.Ast
 import com.daml.lf.scenario.ScenarioLedger
 import com.daml.lf.transaction.SubmittedTransaction
 import com.daml.lf.transaction.Transaction.Transaction
-import com.daml.lf.transaction.{Node => N, NodeId, Transaction => Tx}
+import com.daml.lf.transaction.{Node => N, Transaction => Tx}
 import com.daml.lf.value.Value
 import com.daml.lf.value.Value._
 import com.daml.lf.command._
@@ -101,8 +101,7 @@ class LargeTransactionTest extends AnyWordSpec with Matchers with BazelRunfiles 
   private def report(name: String, quantity: Quantity[Double]): Unit =
     println(s"$name: $quantity")
 
-  private val engine: Engine =
-    new Engine(EngineConfig(LanguageVersion.DevVersions, transactionNormalization = false))
+  private val engine = Engine.DevEngine()
 
   List(5000, 50000, 500000)
     .foreach { txSize =>
@@ -250,9 +249,9 @@ class LargeTransactionTest extends AnyWordSpec with Matchers with BazelRunfiles 
       expectedNumberOfContracts: Int,
   ): Assertion = {
 
-    val newContracts: List[N.GenNode[NodeId]] =
+    val newContracts: List[N.GenNode] =
       firstRootNode(exerciseCmdTx) match {
-        case ne: N.NodeExercises[_] => ne.children.toList.map(nid => exerciseCmdTx.nodes(nid))
+        case ne: N.NodeExercises => ne.children.toList.map(nid => exerciseCmdTx.nodes(nid))
         case n @ _ => fail(s"Unexpected match: $n")
       }
 
@@ -269,6 +268,15 @@ class LargeTransactionTest extends AnyWordSpec with Matchers with BazelRunfiles 
       seed: crypto.Hash,
   ): Transaction = {
     val effectiveAt = Time.Timestamp.now()
+    def enrich(tx: SubmittedTransaction): SubmittedTransaction = {
+      val enricher = new ValueEnricher(engine)
+      def consume[V](res: Result[V]): V =
+        res match {
+          case ResultDone(x) => x
+          case x => fail(s"unexpected Result when enriching value: $x")
+        }
+      SubmittedTransaction(consume(enricher.enrichTransaction(tx)))
+    }
     engine
       .submit(
         submitters = Set(submitter),
@@ -287,7 +295,7 @@ class LargeTransactionTest extends AnyWordSpec with Matchers with BazelRunfiles 
       case Left(err) =>
         fail(s"Unexpected error: $err")
       case Right((tx, _)) =>
-        ledger.commit(submitter, effectiveAt, tx)
+        ledger.commit(submitter, effectiveAt, enrich(tx))
     }
   }
 
@@ -386,8 +394,8 @@ class LargeTransactionTest extends AnyWordSpec with Matchers with BazelRunfiles 
     exerciseCmdTx.roots.length shouldBe 1
     exerciseCmdTx.nodes.size shouldBe 2
 
-    val createNode: N.GenNode[NodeId] = firstRootNode(exerciseCmdTx) match {
-      case ne: N.NodeExercises[_] => exerciseCmdTx.nodes(ne.children.head)
+    val createNode: N.GenNode = firstRootNode(exerciseCmdTx) match {
+      case ne: N.NodeExercises => exerciseCmdTx.nodes(ne.children.head)
       case n @ _ => fail(s"Unexpected match: $n")
     }
 
