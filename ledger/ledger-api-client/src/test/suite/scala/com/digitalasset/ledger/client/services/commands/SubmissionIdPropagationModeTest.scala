@@ -41,12 +41,16 @@ class SubmissionIdPropagationModeTest extends AnyWordSpec with Matchers {
         trackingData.context,
         Left(
           NotOkResponse(
-            aCommandId,
-            StatusProto.of(
-              Status.Code.INTERNAL.value(),
-              s"There are multiple pending commands with ID: $aCommandId for submission ID: None.",
-              Seq.empty,
-            ),
+            Completion(
+              aCommandId,
+              Some(
+                StatusProto.of(
+                  Status.Code.INTERNAL.value(),
+                  s"There are multiple pending commands with ID: $aCommandId for submission ID: None.",
+                  Seq.empty,
+                )
+              ),
+            )
           )
         ),
       )

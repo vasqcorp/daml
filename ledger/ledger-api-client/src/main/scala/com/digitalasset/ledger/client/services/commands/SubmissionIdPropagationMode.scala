@@ -54,12 +54,16 @@ object SubmissionIdPropagationMode {
             trackingData.context,
             Left(
               NotOkResponse(
-                commandId,
-                StatusProto.of(
-                  Status.Code.INTERNAL.value(),
-                  s"There are multiple pending commands with ID: $commandId for submission ID: $maybeSubmissionId.",
-                  Seq.empty,
-                ),
+                Completion(
+                  commandId,
+                  Some(
+                    StatusProto.of(
+                      Status.Code.INTERNAL.value(),
+                      s"There are multiple pending commands with ID: $commandId for submission ID: $maybeSubmissionId.",
+                      Seq.empty,
+                    )
+                  ),
+                )
               )
             ),
           )
