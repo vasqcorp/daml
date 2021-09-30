@@ -52,6 +52,7 @@ class TransactionStreamTerminationIT
       maxCommandsInFlight = config.commandConfig.maxCommandsInFlight,
       maxParallelSubmissions = config.maxParallelSubmissions,
       defaultDeduplicationTime = JDuration.ofSeconds(30),
+      submissionIdPropagationSupported = enableAppendOnlySchema,
     )
 
   private val applicationId = "transaction-stream-termination-test"

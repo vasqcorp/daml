@@ -72,6 +72,7 @@ final class CommandClientIT
       maxCommandsInFlight = 1,
       maxParallelSubmissions = 1,
       defaultDeduplicationTime = Duration.ofSeconds(30),
+      submissionIdPropagationSupported = enableAppendOnlySchema,
     )
 
   private val testLedgerId = domain.LedgerId("ledgerId")

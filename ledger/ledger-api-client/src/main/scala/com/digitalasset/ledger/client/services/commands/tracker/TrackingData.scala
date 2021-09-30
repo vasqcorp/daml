@@ -5,7 +5,7 @@ package com.daml.ledger.client.services.commands.tracker
 
 import java.time.Instant
 
-private[tracker] final case class TrackingData[Context](
+final case class TrackingData[Context](
     commandId: String,
     commandTimeout: Instant,
     context: Context,

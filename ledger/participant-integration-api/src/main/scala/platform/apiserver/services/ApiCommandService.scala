@@ -33,6 +33,7 @@ import com.daml.ledger.client.services.commands.{
   CommandCompletionSource,
   CommandSubmission,
   CommandTrackerFlow,
+  SubmissionIdPropagationMode,
 }
 import com.daml.logging.LoggingContext.withEnrichedLoggingContext
 import com.daml.logging.{ContextualizedLogger, LoggingContext}
@@ -204,6 +205,7 @@ private[apiserver] object ApiCommandService {
       inputBufferSize: Int,
       maxCommandsInFlight: Int,
       trackerRetentionPeriod: Duration,
+      appendOnlySchemaEnabled: Boolean,
   )
 
   final class CompletionServices(
@@ -241,6 +243,9 @@ private[apiserver] object ApiCommandService {
       for {
         ledgerEnd <- completionServices.getCompletionEnd().map(_.getOffset)
       } yield {
+        val submissionIdPropagationMode: SubmissionIdPropagationMode =
+          if (configuration.appendOnlySchemaEnabled) SubmissionIdPropagationMode.Supported
+          else SubmissionIdPropagationMode.NotSupported
         val commandTrackerFlow =
           CommandTrackerFlow[Promise[Either[CompletionFailure, CompletionSuccess]], NotUsed](
             commandSubmissionFlow = submissionFlow,
@@ -263,6 +268,7 @@ private[apiserver] object ApiCommandService {
             // In the future, we may want to configure this separately, but for now, we use re-use
             // the tracker retention period for convenience.
             maximumCommandTimeout = configuration.trackerRetentionPeriod,
+            submissionIdPropagationMode = submissionIdPropagationMode,
           )
         val trackingFlow = MaxInFlight(
           configuration.maxCommandsInFlight,

@@ -94,6 +94,7 @@ private[daml] object ApiServices {
       healthChecks: HealthChecks,
       seedService: SeedService,
       managementServiceTimeout: Duration,
+      appendOnlySchemaEnabled: Boolean,
   )(implicit
       materializer: Materializer,
       esf: ExecutionSequencerFactory,
@@ -243,6 +244,7 @@ private[daml] object ApiServices {
             commandConfig.inputBufferSize,
             commandConfig.maxCommandsInFlight,
             commandConfig.trackerRetentionPeriod,
+            appendOnlySchemaEnabled,
           ),
           // Using local services skips the gRPC layer, improving performance.
           submissionFlow =

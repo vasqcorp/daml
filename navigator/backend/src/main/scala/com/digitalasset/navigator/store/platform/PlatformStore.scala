@@ -312,6 +312,7 @@ class PlatformStore(
         maxCommandsInFlight,
         maxParallelSubmissions,
         Duration.ofSeconds(30),
+        submissionIdPropagationSupported = false,
       ),
       sslContext,
       token,

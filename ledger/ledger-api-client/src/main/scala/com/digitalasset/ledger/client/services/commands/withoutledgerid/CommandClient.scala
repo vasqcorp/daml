@@ -147,6 +147,9 @@ private[daml] final class CommandClient(
     for {
       ledgerEnd <- getCompletionEnd(ledgerIdToUse, token)
     } yield {
+      val submissionIdPropagationMode: SubmissionIdPropagationMode =
+        if (config.submissionIdPropagationSupported) SubmissionIdPropagationMode.Supported
+        else SubmissionIdPropagationMode.NotSupported
       partyFilter(parties.toSet)
         .via(
           CommandUpdaterFlow[Context](config, submissionIdGenerator, applicationId, ledgerIdToUse)
@@ -159,6 +162,7 @@ private[daml] final class CommandClient(
             ),
             createCommandCompletionSource =
               offset => completionSource(parties, offset, ledgerIdToUse, token),
+            submissionIdPropagationMode = submissionIdPropagationMode,
             startingOffset = ledgerEnd.getOffset,
             maximumCommandTimeout = config.defaultDeduplicationTime,
           )

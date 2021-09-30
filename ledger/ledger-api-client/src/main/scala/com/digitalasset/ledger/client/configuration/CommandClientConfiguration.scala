@@ -12,13 +12,21 @@ import java.time.Duration
   * @param defaultDeduplicationTime The deduplication time to use for commands that do not have
   *                                 a deduplication time set. The deduplication time is also used
   *                                 as the time after which commands time out in the command client.
+  * @param submissionIdPropagationSupported Tells whether submission IDs are being returned in Completions.
+  *                                         Should be false for integrations where the mutating schema is enabled.
   */
 final case class CommandClientConfiguration(
     maxCommandsInFlight: Int,
     maxParallelSubmissions: Int,
     defaultDeduplicationTime: Duration,
+    submissionIdPropagationSupported: Boolean,
 )
 
 object CommandClientConfiguration {
-  def default = CommandClientConfiguration(1, 1, Duration.ofSeconds(30L))
+  def default: CommandClientConfiguration = CommandClientConfiguration(
+    maxCommandsInFlight = 1,
+    maxParallelSubmissions = 1,
+    defaultDeduplicationTime = Duration.ofSeconds(30L),
+    submissionIdPropagationSupported = false,
+  )
 }

@@ -13,11 +13,11 @@ import com.daml.ledger.client.services.commands.tracker.CommandTracker._
 import com.daml.ledger.client.services.commands.tracker.CompletionResponse.{
   CompletionFailure,
   CompletionSuccess,
-  NotOkResponse,
 }
 import com.daml.ledger.client.services.commands.{
   CommandSubmission,
   CompletionStreamElement,
+  SubmissionIdPropagationMode,
   tracker,
 }
 import com.daml.util.Ctx
@@ -55,14 +55,13 @@ import scala.util.{Failure, Success, Try}
 private[commands] class CommandTracker[Context](
     maximumCommandTimeout: Duration,
     timeoutDetectionPeriod: FiniteDuration,
+    submissionIdPropagationMode: SubmissionIdPropagationMode,
 ) extends GraphStageWithMaterializedValue[
       CommandTrackerShape[Context],
       Future[Map[TrackedCommandKey, Context]],
     ] {
 
   private val logger = LoggerFactory.getLogger(this.getClass.getName)
-
-  type ContextualizedCompletionResponse = Ctx[Context, Either[CompletionFailure, CompletionSuccess]]
 
   val submitRequestIn: Inlet[Ctx[Context, CommandSubmission]] =
     Inlet[Ctx[Context, CommandSubmission]]("submitRequestIn")
@@ -73,8 +72,8 @@ private[commands] class CommandTracker[Context](
     Inlet[Either[Ctx[(Context, TrackedCommandKey), Try[Empty]], CompletionStreamElement]](
       "commandResultIn"
     )
-  val resultOut: Outlet[ContextualizedCompletionResponse] =
-    Outlet[ContextualizedCompletionResponse]("resultOut")
+  val resultOut: Outlet[ContextualizedCompletionResponse[Context]] =
+    Outlet[ContextualizedCompletionResponse[Context]]("resultOut")
   val offsetOut: Outlet[LedgerOffset] =
     Outlet[LedgerOffset]("offsetOut")
 
@@ -187,7 +186,7 @@ private[commands] class CommandTracker[Context](
       )
 
       private def pushResultOrPullCommandResultIn(
-          completionResponses: Seq[ContextualizedCompletionResponse]
+          completionResponses: Seq[ContextualizedCompletionResponse[Context]]
       ): Unit = {
         // The command tracker detects timeouts outside the regular pull/push
         // mechanism of the input/output ports. Basically the timeout
@@ -212,7 +211,7 @@ private[commands] class CommandTracker[Context](
 
       private def handleSubmitResponse(
           submitResponse: Ctx[(Context, TrackedCommandKey), Try[Empty]]
-      ): Seq[ContextualizedCompletionResponse] = {
+      ): Seq[ContextualizedCompletionResponse[Context]] = {
         val Ctx((_, commandKey), value, _) = submitResponse
         value match {
           case Failure(GrpcException(status @ GrpcStatus(code, _), metadata))
@@ -281,7 +280,7 @@ private[commands] class CommandTracker[Context](
 
       private def getResponsesForTimeouts(
           instant: Instant
-      ): Seq[ContextualizedCompletionResponse] = {
+      ): Seq[ContextualizedCompletionResponse[Context]] = {
         logger.trace("Checking timeouts at {}", instant)
         pendingCommands.view.flatMap { case (commandKey, trackingData) =>
           if (trackingData.commandTimeout.isBefore(instant)) {
@@ -307,12 +306,9 @@ private[commands] class CommandTracker[Context](
 
       private def getResponsesForCompletion(
           completion: Completion
-      ): Seq[ContextualizedCompletionResponse] = {
-
+      ): Seq[ContextualizedCompletionResponse[Context]] = {
         val commandId = completion.commandId
-        val maybeSubmissionId = Option(completion.submissionId).collect {
-          case id if id.nonEmpty => id
-        }
+        val maybeSubmissionId = Option(completion.submissionId).filter(_.nonEmpty)
         logger.trace {
           val completionDescription = completion.status match {
             case Some(StatusProto(code, _, _, _)) if code == Status.Code.OK.value =>
@@ -323,30 +319,14 @@ private[commands] class CommandTracker[Context](
         }
 
         val trackedCommandKeys = pendingCommandKeys(maybeSubmissionId, commandId)
-        val trackingDataForSubmissionId =
+        val trackingDataForCompletion =
           trackedCommandKeys.flatMap(pendingCommands.remove(_).toList)
 
-        if (trackingDataForSubmissionId.size > 1) {
-          trackingDataForSubmissionId.map { trackingData =>
-            Ctx(
-              trackingData.context,
-              Left(
-                NotOkResponse(
-                  commandId,
-                  StatusProto.of(
-                    Status.Code.INTERNAL.value(),
-                    s"There are multiple pending commands with ID: $commandId for submission ID: $maybeSubmissionId. This can only happen for the mutating schema that shouldn't be used anymore, as it doesn't fully support command deduplication.",
-                    Seq.empty,
-                  ),
-                )
-              ),
-            )
-          }
-        } else {
-          trackingDataForSubmissionId.map(trackingData =>
-            Ctx(trackingData.context, tracker.CompletionResponse(completion))
-          )
-        }
+        submissionIdPropagationMode.handleCompletion(
+          completion,
+          trackingDataForCompletion,
+          maybeSubmissionId,
+        )
       }
 
       private def pendingCommandKeys(
@@ -360,7 +340,7 @@ private[commands] class CommandTracker[Context](
       private def getResponseForTerminalStatusCode(
           commandKey: TrackedCommandKey,
           status: StatusProto,
-      ): Option[ContextualizedCompletionResponse] = {
+      ): Option[ContextualizedCompletionResponse[Context]] = {
         logger.trace(
           s"Handling failure of command ${commandKey.commandId} from submission ${commandKey.submissionId}."
         )
@@ -403,6 +383,9 @@ private[commands] class CommandTracker[Context](
 }
 
 object CommandTracker {
+  type ContextualizedCompletionResponse[Context] =
+    Ctx[Context, Either[CompletionFailure, CompletionSuccess]]
+
   private val durationOrdering = implicitly[Ordering[Duration]]
 
   private val nonTerminalCodes =
