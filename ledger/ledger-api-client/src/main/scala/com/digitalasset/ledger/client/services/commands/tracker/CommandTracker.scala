@@ -324,9 +324,9 @@ private[commands] class CommandTracker[Context](
             pendingCommands,
             maybeSubmissionId,
           )
-          .map { case (key, trackingData) =>
+          .map { case (key, completionResponse) =>
             pendingCommands.remove(key)
-            trackingData
+            completionResponse
           }
           .toSeq
       }
