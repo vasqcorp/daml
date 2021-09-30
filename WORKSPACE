@@ -826,7 +826,7 @@ nixpkgs_package(
 load("@os_info//:os_info.bzl", "is_linux")
 cc_library(
   name = "grpc_lib",
-  srcs = [":lib/libgrpc.so", ":lib/libgpr.so"] if is_linux else [":lib/libgrpc.dylib", ":lib/libgpr.dylib"],
+  srcs = [":lib/libgrpc.so", ":lib/libgrpc.so.18", ":lib/libgrpc.so.18.0.0", ":lib/libgpr.so", ":lib/libgpr.so.18", ":lib/libgpr.so.18.0.0"] if is_linux else [":lib/libgrpc.dylib", ":lib/libgpr.dylib"],
   visibility = ["//visibility:public"],
   hdrs = [":include"],
   includes = ["include"],
