@@ -39,6 +39,7 @@ class LedgerClientConfigTest extends AnyWordSpec with Matchers {
                         |    max-commands-in-flight = 260
                         |    max-parallel-submissions = 40
                         |    default-deduplication-time = PT40S
+                        |    submission-id-propagation-supported = true
                         |  }
                         |  max-retry-time = PT45S
                         |  ssl {
@@ -54,6 +55,7 @@ class LedgerClientConfigTest extends AnyWordSpec with Matchers {
       clientConfig.commandClient.maxCommandsInFlight shouldEqual 260
       clientConfig.commandClient.maxParallelSubmissions shouldEqual 40
       clientConfig.commandClient.defaultDeduplicationTime.getSeconds shouldEqual 40
+      clientConfig.commandClient.submissionIdPropagationSupported shouldEqual true
       clientConfig.maxRetryTime.getSeconds shouldEqual 45
       clientConfig.ssl.get.clientKeyCertChainFile shouldBe new File("file1")
       clientConfig.ssl.get.clientKeyFile shouldBe new File("file2")
