@@ -318,24 +318,18 @@ private[commands] class CommandTracker[Context](
           s"Handling $completionDescription $commandId from submission $maybeSubmissionId."
         }
 
-        val trackedCommandKeys = pendingCommandKeys(maybeSubmissionId, commandId)
-        val trackingDataForCompletion =
-          trackedCommandKeys.flatMap(pendingCommands.remove(_).toList)
-
-        submissionIdPropagationMode.handleCompletion(
-          completion,
-          trackingDataForCompletion,
-          maybeSubmissionId,
-        )
+        submissionIdPropagationMode
+          .handleCompletion(
+            completion,
+            pendingCommands,
+            maybeSubmissionId,
+          )
+          .map { case (key, trackingData) =>
+            pendingCommands.remove(key)
+            trackingData
+          }
+          .toSeq
       }
-
-      private def pendingCommandKeys(
-          submissionId: Option[String],
-          commandId: String,
-      ): Seq[TrackedCommandKey] =
-        submissionId.map(id => Seq(TrackedCommandKey(id, commandId))).getOrElse {
-          pendingCommands.keys.filter(_.commandId == commandId).toList
-        }
 
       private def getResponseForTerminalStatusCode(
           commandKey: TrackedCommandKey,

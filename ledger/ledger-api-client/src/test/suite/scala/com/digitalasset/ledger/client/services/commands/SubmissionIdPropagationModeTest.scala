@@ -5,7 +5,7 @@ package com.daml.ledger.client.services.commands
 
 import com.daml.ledger.api.v1.completion.Completion
 import com.daml.ledger.client.services.commands.tracker.CompletionResponse.NotOkResponse
-import com.daml.ledger.client.services.commands.tracker.TrackingData
+import com.daml.ledger.client.services.commands.tracker.{TrackedCommandKey, TrackingData}
 import com.daml.util.Ctx
 import com.google.rpc.status.{Status => StatusProto}
 import io.grpc.Status
@@ -21,19 +21,19 @@ class SubmissionIdPropagationModeTest extends AnyWordSpec with Matchers {
     "ignore a completion without a submission id (if the propagation is supported)" in {
       SubmissionIdPropagationMode.Supported.handleCompletion(
         aCompletion(maybeSubmissionId = None),
-        trackingDataForCompletion = Seq.empty,
+        trackedCommands = Map.empty,
         maybeSubmissionId = None,
-      ) shouldBe Seq.empty
+      ) shouldBe Map.empty
     }
 
     "return a completion response (if the propagation is supported)" in {
-      val submissionId = Some("aSubmissionId")
+      val submissionId = Some(aSubmissionId)
       val completion = aCompletion(submissionId)
       SubmissionIdPropagationMode.Supported.handleCompletion(
         completion = completion,
-        trackingDataForCompletion = Seq(trackingData),
+        trackedCommands = Map(aTrackedCommandKey -> trackingData),
         maybeSubmissionId = submissionId,
-      ) shouldBe Seq(Ctx("context", tracker.CompletionResponse(completion)))
+      ) shouldBe Map(aTrackedCommandKey -> Ctx(context, tracker.CompletionResponse(completion)))
     }
 
     "return a failed completion if there are multiple tracked submissions with the same command id (if the propagation is not supported)" in {
@@ -54,30 +54,32 @@ class SubmissionIdPropagationModeTest extends AnyWordSpec with Matchers {
           )
         ),
       )
+      val key1 = TrackedCommandKey("submissionId1", aCommandId)
+      val key2 = TrackedCommandKey("submissionId2", aCommandId)
       SubmissionIdPropagationMode.NotSupported.handleCompletion(
         completion = aCompletion(maybeSubmissionId = None),
-        trackingDataForCompletion = Seq(trackingData, trackingData),
+        trackedCommands = Map(key1 -> trackingData, key2 -> trackingData),
         maybeSubmissionId = None,
-      ) shouldBe Seq(expectedResponse, expectedResponse)
+      ) shouldBe Map(key1 -> expectedResponse, key2 -> expectedResponse)
     }
 
     "return a completion response (if the propagation is not supported)" in {
-      val submissionId = Some("aSubmissionId")
+      val submissionId = Some(aSubmissionId)
       val completion = aCompletion(submissionId)
       SubmissionIdPropagationMode.NotSupported.handleCompletion(
         completion,
-        Seq(trackingData),
+        trackedCommands = Map(aTrackedCommandKey -> trackingData),
         submissionId,
-      ) shouldBe Seq(Ctx(context, tracker.CompletionResponse(completion)))
+      ) shouldBe Map(aTrackedCommandKey -> Ctx(context, tracker.CompletionResponse(completion)))
     }
   }
 }
 
 object SubmissionIdPropagationModeTest {
+  private val aSubmissionId = "aSubmissionId"
   private val aCommandId = "aCommandId"
-
+  private val aTrackedCommandKey = TrackedCommandKey(aSubmissionId, aCommandId)
   private val context = "context"
-
   private val trackingData = TrackingData(aCommandId, Instant.MAX, context)
 
   private def aCompletion(maybeSubmissionId: Option[String]) = Completion.of(

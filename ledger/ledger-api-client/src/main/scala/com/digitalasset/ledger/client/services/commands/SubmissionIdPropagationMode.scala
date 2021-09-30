@@ -6,7 +6,7 @@ package com.daml.ledger.client.services.commands
 import com.daml.ledger.api.v1.completion.Completion
 import com.daml.ledger.client.services.commands.tracker.CommandTracker.ContextualizedCompletionResponse
 import com.daml.ledger.client.services.commands.tracker.CompletionResponse.NotOkResponse
-import com.daml.ledger.client.services.commands.tracker.TrackingData
+import com.daml.ledger.client.services.commands.tracker.{TrackedCommandKey, TrackingData}
 import com.daml.util.Ctx
 import com.google.rpc.status.{Status => StatusProto}
 import io.grpc.Status
@@ -15,9 +15,9 @@ import org.slf4j.LoggerFactory
 sealed trait SubmissionIdPropagationMode {
   def handleCompletion[Context](
       completion: Completion,
-      trackingDataForCompletion: Seq[TrackingData[Context]],
+      trackedCommands: collection.Map[TrackedCommandKey, TrackingData[Context]],
       maybeSubmissionId: Option[String],
-  ): Seq[ContextualizedCompletionResponse[Context]]
+  ): collection.Map[TrackedCommandKey, ContextualizedCompletionResponse[Context]]
 }
 
 object SubmissionIdPropagationMode {
@@ -26,31 +26,51 @@ object SubmissionIdPropagationMode {
 
     def handleCompletion[Context](
         completion: Completion,
-        trackingDataForCompletion: Seq[TrackingData[Context]],
+        trackedCommands: collection.Map[TrackedCommandKey, TrackingData[Context]],
         maybeSubmissionId: Option[String],
-    ): Seq[ContextualizedCompletionResponse[Context]] =
-      if (maybeSubmissionId.isEmpty) {
-        logger.trace(
-          "Ignoring a completion with an empty submission ID for a submission from the CommandSubmissionService."
-        )
-        Seq.empty
-      } else {
-        trackingDataForCompletion.map(trackingData =>
-          Ctx(trackingData.context, tracker.CompletionResponse(completion))
-        )
-      }
+    ): collection.Map[TrackedCommandKey, ContextualizedCompletionResponse[Context]] =
+      maybeSubmissionId
+        .map { submissionId =>
+          val key = TrackedCommandKey(submissionId, completion.commandId)
+          val trackedCommandForCompletion = trackedCommands.get(key)
+
+          trackedCommandForCompletion
+            .map { trackingData =>
+              Map(key -> Ctx(trackingData.context, tracker.CompletionResponse(completion)))
+            }
+            .getOrElse(Map.empty)
+        }
+        .getOrElse {
+          logger.trace(
+            "Ignoring a completion with an empty submission ID for a submission from the CommandSubmissionService."
+          )
+          Map.empty
+        }
   }
 
   case object NotSupported extends SubmissionIdPropagationMode {
     def handleCompletion[Context](
         completion: Completion,
-        trackingDataForCompletion: Seq[TrackingData[Context]],
+        trackedCommands: collection.Map[TrackedCommandKey, TrackingData[Context]],
         maybeSubmissionId: Option[String],
-    ): Seq[ContextualizedCompletionResponse[Context]] =
-      if (trackingDataForCompletion.size > 1) {
-        trackingDataForCompletion.map { trackingData =>
-          val commandId = completion.commandId
-          Ctx(
+    ): collection.Map[TrackedCommandKey, ContextualizedCompletionResponse[Context]] = {
+      val commandId = completion.commandId
+
+      val trackedCommandsForCompletion = maybeSubmissionId
+        .map { submissionId =>
+          val key = TrackedCommandKey(submissionId, commandId)
+          trackedCommands
+            .get(key)
+            .map(trackingData => Map(key -> trackingData))
+            .getOrElse(Map.empty)
+        }
+        .getOrElse {
+          trackedCommands.filter { case (key, _) => key.commandId == commandId }
+        }
+
+      if (trackedCommandsForCompletion.size > 1) {
+        trackedCommandsForCompletion.map { case (key, trackingData) =>
+          key -> Ctx(
             trackingData.context,
             Left(
               NotOkResponse(
@@ -69,9 +89,10 @@ object SubmissionIdPropagationMode {
           )
         }
       } else {
-        trackingDataForCompletion.map(trackingData =>
-          Ctx(trackingData.context, tracker.CompletionResponse(completion))
-        )
+        trackedCommandsForCompletion.map { case (key, trackingData) =>
+          key -> Ctx(trackingData.context, tracker.CompletionResponse(completion))
+        }
       }
+    }
   }
 }
