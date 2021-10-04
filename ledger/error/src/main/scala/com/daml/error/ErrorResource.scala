@@ -26,6 +26,9 @@ object ErrorResource {
   object ContractKey extends ErrorResource {
     def asString: String = "contract-key"
   }
+  object TransactionId extends ErrorResource {
+    def asString: String = "transaction-id"
+  }
   object DalfPackage extends ErrorResource {
     def asString: String = "lf-package"
   }

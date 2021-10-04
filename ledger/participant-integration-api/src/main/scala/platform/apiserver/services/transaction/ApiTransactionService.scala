@@ -31,7 +31,6 @@ import com.daml.logging.{ContextualizedLogger, LoggingContext}
 import com.daml.metrics.Metrics
 import com.daml.platform.apiserver.ErrorCodesVersionSwitcher
 import com.daml.platform.apiserver.error.{CorrelationId, LedgerApiErrors}
-import com.daml.platform.apiserver.services.transaction.ApiTransactionService._
 import com.daml.platform.apiserver.services.{StreamMetrics, logging}
 import com.daml.platform.server.api.services.domain.TransactionService
 import com.daml.platform.server.api.services.grpc.GrpcTransactionService
@@ -57,14 +56,6 @@ private[apiserver] object ApiTransactionService {
       new ApiTransactionService(transactionsService, metrics, errorsVersionsSwitcher),
       ledgerId,
       PartyNameChecker.AllowAllParties,
-    )
-
-  @throws[StatusRuntimeException]
-  private def getOrElseThrowNotFound[A](a: Option[A]): A =
-    a.getOrElse(
-      throw Status.NOT_FOUND
-        .withDescription("Transaction not found, or not visible.")
-        .asRuntimeException()
     )
 }
 
@@ -191,9 +182,19 @@ private[apiserver] final class ApiTransactionService private (
       .fromString(request.eventId.unwrap)
       .fold(
         err =>
-          Future.failed[GetFlatTransactionResponse](
-            Status.NOT_FOUND.withDescription(s"invalid eventId: $err").asRuntimeException()
-          ),
+          Future.failed[GetFlatTransactionResponse] {
+            val msg = s"invalid eventId: $err"
+            errorsVersionsSwitcher.choose(
+              v1 = Status.NOT_FOUND.withDescription(msg).asRuntimeException(),
+              v2 = LedgerApiErrors.CommandValidation.InvalidArgument
+                .Reject(msg)(
+                  correlationId = CorrelationId.none,
+                  loggingContext = implicitly[LoggingContext],
+                  logger = logger,
+                )
+                .asGrpcError,
+            )
+          },
         eventId =>
           lookUpFlatByTransactionId(
             TransactionId(eventId.transactionId),
@@ -224,15 +225,38 @@ private[apiserver] final class ApiTransactionService private (
   ): Future[GetTransactionResponse] =
     transactionsService
       .getTransactionTreeById(transactionId, requestingParties)
-      .map(getOrElseThrowNotFound)
+      .map(getOrElseThrowNotFound(transactionId))
 
   private def lookUpFlatByTransactionId(
       transactionId: TransactionId,
       requestingParties: Set[Party],
-  ): Future[GetFlatTransactionResponse] =
+  ): Future[GetFlatTransactionResponse] = {
     transactionsService
       .getTransactionById(transactionId, requestingParties)
-      .map(getOrElseThrowNotFound)
+      .map(getOrElseThrowNotFound(transactionId))
+  }
+
+  @throws[StatusRuntimeException]
+  private def getOrElseThrowNotFound[A](transactionId: TransactionId)(a: Option[A]): A =
+    a.getOrElse {
+      val msg = "Transaction not found, or not visible."
+      val exception = errorsVersionsSwitcher.choose(
+        v1 = Status.NOT_FOUND
+          .withDescription(msg)
+          .asRuntimeException(),
+        v2 = LedgerApiErrors.InterpreterErrors.LookupErrors.TransactionNotFound
+          .Reject(
+            cause = msg,
+            transactionId = transactionId.unwrap,
+          )(
+            correlationId = CorrelationId.none,
+            loggingContext = implicitly[LoggingContext],
+            logger = logger,
+          )
+          .asGrpcError,
+      )
+      throw exception
+    }
 
   private def transactionsLoggable(transactions: GetTransactionsResponse): String =
     s"Responding with transactions: ${transactions.transactions.toList
