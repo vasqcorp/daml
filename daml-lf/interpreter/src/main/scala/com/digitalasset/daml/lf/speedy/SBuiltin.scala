@@ -1040,7 +1040,7 @@ private[lf] object SBuiltin {
               coid,
               templateId,
               onLedger.committers,
-              { case V.ContractInst(actualTmplId, V.VersionedValue(_, arg), _) =>
+              { case V.VersionedContractInstance(_, actualTmplId, arg, _) =>
                 if (actualTmplId != templateId) {
                   machine.ctrl =
                     SEDamlException(IE.WronglyTypedContract(coid, templateId, actualTmplId))
@@ -1090,7 +1090,7 @@ private[lf] object SBuiltin {
               coid,
               ifaceId, // not actually used, maybe this param should be dropped from SResultNeedContract
               onLedger.committers,
-              { case V.ContractInst(actualTmplId, V.VersionedValue(_, arg), _) =>
+              { case V.VersionedContractInstance(_, actualTmplId, arg, _) =>
                 val keyExpr = SEApp(SEVal(KeyDefRef(actualTmplId)), Array(SELocS(1)))
                 machine.pushKont(KCacheContract(machine, actualTmplId, coid))
                 machine.ctrl = SELet1(
