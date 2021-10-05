@@ -7,6 +7,14 @@ Installing the SDK
 1. Install the dependencies
 ***************************
 
+XXX
+
+.. helloworld123::
+
+.. list-all-error-codes::
+
+XXX
+
 The Daml Connect SDK currently runs on Windows, macOS and Linux.
 
 You need to install:

@@ -23,7 +23,7 @@ import os
 import sys
 import glob
 sys.path.insert(0, os.path.abspath('../static'))
-
+sys.path.insert(0, os.path.abspath('../../sphinx_ext'))
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
@@ -35,7 +35,9 @@ sys.path.insert(0, os.path.abspath('../static'))
 # ones.
 extensions = [
     'sphinx.ext.extlinks',
-    'sphinx_copybutton'
+    'sphinx_copybutton',
+    'helloworld',
+    'canton_embed_doc',
 ]
 
 # Add any paths that contain templates here, relative to this directory.

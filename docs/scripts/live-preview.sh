@@ -85,4 +85,4 @@ DATE=$(date +"%Y-%m-%d")
 echo { \"$DATE\" : \"$DATE\" } >  $BUILD_DIR/gen/versions.json
 
 pipenv install
-pipenv run sphinx-autobuild -c $BUILD_DIR/configs/html $BUILD_DIR/source $BUILD_DIR/gen
+pipenv run sphinx-autobuild -D embed_reference_json=../../bazel-bin/docs/embed_reference.json -c $BUILD_DIR/configs/html $BUILD_DIR/source $BUILD_DIR/gen
