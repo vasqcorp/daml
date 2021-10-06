@@ -488,7 +488,14 @@ convertModule lfVersion pkgMap stablePackages isGenerated file x depOrphanModule
     templates <- convertTemplateDefs env
     exceptions <- convertExceptionDefs env
     interfaces <- convertInterfaces env (eltsUFM (cm_types x))
-    pure (LF.moduleFromDefinitions lfModName (Just $ fromNormalizedFilePath file) flags (types ++ templates ++ exceptions ++ definitions ++ interfaces ++ depOrphanModules))
+    let defs =
+            types
+            ++ templates
+            ++ exceptions
+            ++ definitions
+            ++ interfaces
+            ++ depOrphanModules
+    pure (LF.moduleFromDefinitions lfModName (Just $ fromNormalizedFilePath file) flags defs)
     where
         ghcModName = GHC.moduleName $ cm_module x
         thisUnitId = GHC.moduleUnitId $ cm_module x

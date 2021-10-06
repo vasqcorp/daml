@@ -34,10 +34,13 @@ import Data.List (sortOn)
 import qualified Data.Set as S
 import qualified Data.Text as T
 
+import qualified "ghc-lib-parser" Avail as GHC
 import qualified "ghc-lib-parser" BasicTypes as GHC
-import qualified "ghc-lib-parser" Class as GHC
-import qualified "ghc-lib-parser" SrcLoc as GHC
 import qualified "ghc-lib-parser" BooleanFormula as BF
+import qualified "ghc-lib-parser" Class as GHC
+import qualified "ghc-lib-parser" Name as GHC
+import qualified "ghc-lib-parser" SrcLoc as GHC
+import qualified "ghc-lib-parser" FieldLabel as GHC
 
 import qualified DA.Daml.LF.Ast as LF
 
@@ -205,6 +208,27 @@ decodePackageRef = \case
 
 decodeModuleName :: LF.Type -> Maybe LF.ModuleName
 decodeModuleName = fmap LF.ModuleName . decodeTypeList decodeText
+
+
+----------------------
+-- Module reexports --
+----------------------
+reexportsName :: LF.ExprValName
+reexportsName = LF.ExprValName "$$reexports"
+
+encodeReexports :: [GHC.AvailInfo] -> LF.Type
+encodeReexports = encodeTypeList encodeAvailInfo
+
+encodeAvailInfo :: GHC.AvailInfo -> LF.Type
+encodeAvailInfo = \case
+  GHC.Avail n -> TEncodedCon "Avail" (encodeName n)
+  GHC.AvailTC n ns fls -> TEncodedCon "AvailTC" (encodeAvailTC n ns fls)
+
+encodeName :: GHC.Name -> LF.Type
+encodeName = _a
+
+encodeAvailTC :: GHC.Name -> [GHC.Name] -> [GHC.FieldLabel] -> LF.Type
+encodeAvailTC = undefined
 
 ---------------------
 -- STUB GENERATION --
