@@ -1236,6 +1236,50 @@ tests Tools{damlc,repl,validate,davlDar,oldProjDar} = testGroup "Data Dependenci
             ]
         ]
 
+    , dataDependenciesTest "Using reexported modules"
+        -- This test checks that reexported modules are visible
+        [
+            (,) "Type.daml"
+            [ "module Type where"
+            , "data T = T"
+            ]
+        ,   (,) "Wrapper.daml"
+            [ "module Wrapper (module Type) where"
+            , "import Type"
+            ]
+        ]
+        [
+            (,) "Main.daml"
+            [ "module Main where"
+            , "import Wrapper"
+            , "t = T"
+            -- If reexported modules were not imported correctly,
+            -- we'd get a missing data constructor error from GHC.
+            ]
+        ]
+
+    , dataDependenciesTest "Using reexported values"
+        -- This test checks that reexported values are visible
+        [
+            (,) "Base.daml"
+            [ "module Base where"
+            , "x = ()"
+            ]
+        ,   (,) "Wrapper.daml"
+            [ "module Wrapper (x) where"
+            , "import Base"
+            ]
+        ]
+        [
+            (,) "Main.daml"
+            [ "module Main where"
+            , "import Wrapper"
+            , "y = x"
+            -- If reexported values were not imported correctly,
+            -- we'd get a missing variable error from GHC.
+            ]
+        ]
+
     , testCaseSteps "User-defined exceptions" $ \step -> withTempDir $ \tmpDir -> do
         step "building project to be imported via data-dependencies"
         createDirectoryIfMissing True (tmpDir </> "lib")
