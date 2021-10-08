@@ -326,7 +326,7 @@ private[lf] final class Compiler(
         )
       }
 
-      tmpl.choices.values.foreach(x => addDef(compileChoice(identifier, tmpl, x)))
+      tmpl.choices.values.foreach(x => addDef(compileChoice(identifier, tmpl.param, x)))
 
       tmpl.key.foreach { tmplKey =>
         addDef(compileFetchByKey(identifier, tmpl, tmplKey))
@@ -1081,7 +1081,7 @@ private[lf] final class Compiler(
       case List(keyPos, choiceArgPos, tokenPos) =>
         let(encodeKeyWithMaintainers(keyPos, tmplKey)) { keyWithMPos =>
           let(SBUFetchKey(tmplId)(svar(keyWithMPos))) { cidPos =>
-            compileChoiceBody(tmplId, tmpl, choice)(
+            compileChoiceBody(tmplId, tmpl.param, choice)(
               choiceArgPos,
               cidPos,
               Some(keyWithMPos),
